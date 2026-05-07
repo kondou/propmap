@@ -28,6 +28,7 @@ contest_logs/rbn/
 heatmap_working.html
 handover_to_claudecode.md
 contest_logs/README.txt
+contest_logs/regenerate_all_rbn.sh
 
 # Claude Code internal
 .claude/
