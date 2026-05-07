@@ -165,6 +165,8 @@ Use the slider to set the display radius from the center grid (km). Only QSOs an
 - **Checked (default)**: Dragging the map moves only the visual display; the heatmap is not recalculated. The heatmap updates to the new center when **Apply** is clicked.
 - **Unchecked**: The heatmap updates in real time as you drag. Dragging over a large area increases rendering load.
 
+While dragging, the center grid label is shown at full brightness on the map. Three seconds after the drag ends, it fades automatically to avoid interfering with grid panel display.
+
 ### Contest, Band, Mode, and Power Selection
 
 | Item | Description |

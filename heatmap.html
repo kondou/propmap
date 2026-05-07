@@ -415,11 +415,13 @@ function _redrawCellsOnly(){
   // 中心マーカー
   const cp=proj([CX,CY]);
   if(cp){
+    c2.globalAlpha=centerLabelAlpha;
     c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
     c2.fillStyle='#ee4444';c2.fill();
     c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
     c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';c2.textBaseline='middle';
     c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
+    c2.globalAlpha=1.0;
   }
   if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
     const qp=proj([QX,QY]);
@@ -651,9 +653,32 @@ function geoToGrid4(lon,lat){
 // ---- ドラッグ -----------------------------------------------------------
 let dragStart=null,dragStartCX=null,dragStartCY=null,isDragging=false;
 const DRAG_THR=5;
+let centerLabelAlpha=0.20;
+let _cLabelFadeTimer=null,_cLabelFadeRaf=null;
+const C_LABEL_DIM=0.20,C_LABEL_FADE_MS=600;
+function _cancelCenterFade(){
+  if(_cLabelFadeTimer){clearTimeout(_cLabelFadeTimer);_cLabelFadeTimer=null;}
+  if(_cLabelFadeRaf){cancelAnimationFrame(_cLabelFadeRaf);_cLabelFadeRaf=null;}
+}
+function _startCenterFade(){
+  const t0=performance.now(),a0=centerLabelAlpha;
+  function step(ts){
+    const p=Math.min(1,(ts-t0)/C_LABEL_FADE_MS);
+    centerLabelAlpha=a0+(C_LABEL_DIM-a0)*p;
+    _skipCharts=true;drawMap(true);_skipCharts=false;
+    if(p<1)_cLabelFadeRaf=requestAnimationFrame(step);
+    else{_cLabelFadeRaf=null;centerLabelAlpha=C_LABEL_DIM;}
+  }
+  _cLabelFadeRaf=requestAnimationFrame(step);
+}
+function _scheduleCenterFade(){
+  _cancelCenterFade();
+  _cLabelFadeTimer=setTimeout(_startCenterFade,3000);
+}
 
 cv.addEventListener('mousedown',e=>{
   if(e.button!==0)return;
+  _cancelCenterFade(); centerLabelAlpha=1.0;
   const rect=cv.getBoundingClientRect();
   dragStart={x:(e.clientX-rect.left)*(SZ/rect.width),
              y:(e.clientY-rect.top)*(SZ/rect.height)};
@@ -684,10 +709,11 @@ cv.addEventListener('mousemove',e=>{
 function endDrag(e){
   if(!dragStart)return;
   dragStart=null; isDragging=false; cv.style.cursor='crosshair';
+  _scheduleCenterFade();
 }
 cv.addEventListener('mouseup',endDrag);
 cv.addEventListener('mouseleave',()=>{
-  if(dragStart&&isDragging){dragStart=null;isDragging=false;cv.style.cursor='crosshair';}
+  if(dragStart&&isDragging){dragStart=null;isDragging=false;cv.style.cursor='crosshair';_scheduleCenterFade();}
 });
 
 let _wheelPending=false, _skipCharts=false, _chartDebounce=null;
@@ -1532,11 +1558,13 @@ function drawMap(skipBuildProj){
 
   const cp=proj([CX,CY]);
   if(cp){
+    c2.globalAlpha=centerLabelAlpha;
     c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
     c2.fillStyle='#ee4444';c2.fill();
     c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
     c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';
     c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
+    c2.globalAlpha=1.0;
   }
 
   if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
