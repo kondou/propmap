@@ -1,0 +1,32 @@
+# Editor
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Large generated/downloaded data (built locally with pipeline scripts)
+data/
+contest_logs/raw/
+contest_logs/csv/
+contest_logs/rbn/
+
+# Log files
+*.log
+
+# Working / internal files
+heatmap_working.html
+handover_to_claudecode.md
+
+# Claude Code internal
+.claude/

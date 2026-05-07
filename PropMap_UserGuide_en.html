@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PropMap User Guide</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: #d4d4d4;
+  background: #1a1a1a;
+  max-width: 100%;
+  margin: 0;
+  padding: 32px 48px 80px;
+}
+h1 { font-size: 1.9em; border-bottom: 2px solid #444; padding-bottom: 0.35em; margin: 0.6em 0 0.8em; color: #e8e8e8; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #333; padding-bottom: 0.25em; margin: 2.2em 0 0.8em; color: #e0e0e0; }
+h3 { font-size: 1.1em; margin: 1.6em 0 0.5em; color: #d8d8d8; }
+h4 { font-size: 1em; margin: 1.2em 0 0.4em; color: #cccccc; }
+p { margin: 0.7em 0; }
+ul, ol { padding-left: 1.6em; margin: 0.6em 0; }
+li { margin: 0.3em 0; }
+a { color: #7ab3e0; text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 600; color: #e8e8e8; }
+code {
+  font-family: 'SF Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+  font-size: 0.875em;
+  background: #2a2a2a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #e06c75;
+}
+pre {
+  background: #242424;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+  position: relative;
+  width: fit-content;
+  min-width: 20em;
+}
+pre code {
+  background: none;
+  padding: 0;
+  color: #d4d4d4;
+  font-size: 0.875em;
+  line-height: 1.5;
+}
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #aaa;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+pre:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { background: #333; }
+.copy-btn.copied { background: #28a745; color: #fff; border-color: #28a745; opacity: 1; }
+table {
+  border-collapse: collapse;
+  width: auto;
+  max-width: 100%;
+  margin: 1em 0;
+  font-size: 0.92em;
+}
+th, td { border: 1px solid #3a3a3a; padding: 8px 14px; text-align: left; }
+th { background: #2a2a2a; font-weight: 600; color: #e0e0e0; }
+tr:nth-child(even) td { background: #222; }
+blockquote {
+  border-left: 4px solid #555;
+  margin: 1em 0;
+  padding: 0.6em 1.2em;
+  color: #aaa;
+  background: #242424;
+  border-radius: 0 4px 4px 0;
+}
+blockquote p { margin: 0; }
+hr { border: none; border-top: 1px solid #333; margin: 2em 0; }
+img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radius: 4px; }
+@media (max-width: 640px) {
+  body { padding: 16px 18px 60px; }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.25em; }
+}
+</style>
+</head>
+<body>
+<h1 id="propmap-user-guide">PropMap User Guide</h1>
+<hr />
+<h2 id="1-introduction">1. Introduction</h2>
+<h3 id="what-is-propmap">What is PropMap?</h3>
+<p>PropMap is a tool that aggregates public contest log data from amateur radio contests and RBN (Reverse Beacon Network) spot data, then visualizes past HF band propagation conditions as a heatmap on an Azimuthal Equidistant Map centered on a specified grid locator (also known as grid square or Maidenhead locator; this guide uses the term "grid locator" throughout). Based on historical data, it is useful for understanding propagation trends during contests held at the same time of year. Past data can be replayed, and by synchronizing the playback time with real time, you can reference historical data for the same time of day in real time.</p>
+<p>Useful for planning contest operations, identifying optimal band-change timing, analyzing propagation trends from past contests, and real-time reference during live contests.</p>
+<h3 id="system-requirements">System Requirements</h3>
+<ul>
+<li>macOS Tahoe / Windows 11 (tested)</li>
+<li>Python 3 (see "<a href="#python-3-installation">Python 3 Installation</a>" for setup)</li>
+<li>Modern browser (Safari, Chrome, Edge, etc.)</li>
+<li>JSON data files for the contest you want to view (must be placed in <code>~/heatmap/data/</code>). <a href="#10-advance-data-preparation">Data must be built in advance — see Section 10</a></li>
+</ul>
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+<li>Obtain public logs for the contest you want to reference</li>
+<li>Grid locator must be correctly filled in the log header (<strong>GRID-LOCATOR</strong>) — 4 characters are sufficient</li>
+<li>Grid locator estimation from callsign is not currently implemented</li>
+<li>RBN raw data (if using RBN)</li>
+<li>RBN data uses CW mode only</li>
+<li>RBN spots used are limited to stations whose grid locator is recorded in the public logs</li>
+<li>Only QSOs that pass cross-checking between public logs and where both stations' grid locators are known are included</li>
+<li>Cross-check criteria: both logs list the other station on the same band within 15 minutes; exchange number correctness is not checked</li>
+<li>Callsign matching: exact match or up to 2 character differences are accepted</li>
+<li>Band mismatch correction: if bands differ, the band with more QSOs within 15 minutes of each station's logged time is used as the correct band</li>
+</ul>
+<hr />
+<h2 id="2-setup">2. Setup</h2>
+<h3 id="python-3-installation">Python 3 Installation</h3>
+<h4 id="macos-tahoe">macOS Tahoe</h4>
+<p>macOS includes a system Python 3, but it may be replaced by OS updates and <code>pip</code> is awkward to use. Homebrew Python is recommended so that additional packages can easily be installed with <code>pip</code> when needed by the data processing scripts.</p>
+<ol>
+<li>Install Homebrew (if not already installed):</li>
+</ol>
+<pre><code class="language-bash">/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;
+</code></pre>
+<ol>
+<li>Install Python 3:</li>
+</ol>
+<pre><code class="language-bash">brew install python3
+</code></pre>
+<ol>
+<li>Verify installation:</li>
+</ol>
+<pre><code class="language-bash">python3 --version
+</code></pre>
+<h4 id="windows-11-without-wsl2">Windows 11 — Without WSL2</h4>
+<p>The viewer and full data-building pipeline work with Python for Windows and the included <code>generate_all.bat</code>. Since <code>generate_all.sh</code> is a bash script and cannot be run directly on Windows, use the equivalent <code>generate_all.bat</code> instead.</p>
+<ol>
+<li>Download the Windows installer from <a href="https://www.python.org/downloads/">python.org</a></li>
+<li>During installation, <strong>check "Add Python to PATH"</strong> (it is unchecked by default — this step is required)</li>
+<li>Verify installation (Command Prompt):</li>
+</ol>
+<pre><code>python --version
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> On Windows, use <code>python</code> instead of <code>python3</code></p>
+</blockquote>
+<p>Place files at <code>%USERPROFILE%\heatmap\</code> (e.g., <code>C:\Users\YourName\heatmap\</code>)</p>
+<h4 id="windows-11-with-wsl2">Windows 11 — With WSL2</h4>
+<p>With WSL2, shell scripts work as-is and the experience is equivalent to macOS. For WSL2 setup, refer to the <a href="https://learn.microsoft.com/en-us/windows/wsl/install">Microsoft official documentation</a>. After installing Ubuntu:</p>
+<pre><code class="language-bash">sudo apt update &amp;&amp; sudo apt install -y python3 python3-pip
+</code></pre>
+<p>All subsequent steps are the same as macOS. Place files under the WSL2 home directory (<code>~/heatmap/</code>). Access the browser on the Windows side at <code>http://localhost:8765</code>.</p>
+<hr />
+<h3 id="file-structure">File Structure</h3>
+<pre><code class="language-no-copy">~/heatmap/
+├── heatmap.html              Main application (self-contained single file)
+├── start_heatmap.command     Launcher (macOS)
+├── start_heatmap.bat         Launcher (Windows)
+├── countries-50m.json        Terrain data
+├── data/
+│   ├── {contest}_{year}.json         QSO data (10-minute resolution)
+│   └── {contest}_{year}_rbn.json     RBN data (10-minute resolution)
+└── contest_logs/
+    ├── raw/{contest}_{year}/*.txt     Public Cabrillo logs
+    ├── csv/                           Processed CSV files
+    ├── rbn/                           RBN data
+    ├── SN_m_tot_V2.0.txt              Sunspot number data (SILSO)
+    ├── *.py                           Data processing scripts
+    ├── generate_all.sh                Batch regeneration script (macOS/Linux)
+    └── generate_all.bat               Batch regeneration script (Windows)
+</code></pre>
+<h3 id="launching-the-application">Launching the Application</h3>
+<p><strong>macOS / Windows (with WSL2)</strong></p>
+<p>Double-click <code>start_heatmap.command</code>, or run the following in a terminal. When double-clicked, a terminal opens and the default browser launches automatically — no need to open the browser separately. Closing the terminal window stops the server.</p>
+<pre><code class="language-bash">python3 -m http.server 8765 --directory ~/heatmap
+</code></pre>
+<p><strong>Windows (without WSL2)</strong></p>
+<p>Double-click <code>start_heatmap.bat</code>, or run the following in Command Prompt:</p>
+<pre><code>python -m http.server 8765 --directory %USERPROFILE%\heatmap
+</code></pre>
+<p>After launching, open <code>http://localhost:8765</code> in your browser.</p>
+<blockquote>
+<p><strong>Note:</strong> A local file server is required — opening <code>heatmap.html</code> directly in a browser will not work.</p>
+</blockquote>
+<hr />
+<h2 id="3-screen-layout">3. Screen Layout</h2>
+<p><img src="images/sc1.png" alt="Full screen" style="max-width:100%;width:1400px;"></p>
+<p>The screen is divided into two main areas.</p>
+<p><strong>Azimuthal Map Area (left or top)</strong>
+Displays the heatmap on an Azimuthal Equidistant Map centered on the selected grid locator.</p>
+<p><strong>Control + Graph Area (right or bottom)</strong>
+Contains display settings and time-series graphs showing QSO counts and active grid counts over ±3 hours.</p>
+<h3 id="responsive-layout">Responsive Layout</h3>
+<p>The layout switches automatically based on browser window width.</p>
+<p>When the browser window is wide (desktop, laptop, etc.), the map area and control + graph area appear side by side. When narrow (tablet portrait, smartphone, or a resized window), they stack vertically.</p>
+<p><img src="images/sc2.png" alt="Stacked layout" style="max-width:100%;width:550px;"></p>
+<p>In stacked mode, the map fills the full window width, and the graph height is limited to 2.2× the map height.</p>
+<hr />
+<h2 id="4-basic-operation">4. Basic Operation</h2>
+<p><img src="images/sc3.png" alt="Control panel" style="max-width:100%;width:700px;"></p>
+<h3 id="center-grid-and-display-range">Center Grid and Display Range</h3>
+<p><strong>Center (center grid)</strong>
+Enter a 4-character grid locator (e.g., PM52). Click <strong>Apply</strong> or press Enter to apply. You can also drag the map to position the desired area at the center, then click <strong>Apply</strong>.</p>
+<p><strong>Dist (distance filter)</strong>
+Use the slider to set the display radius from the center grid (km). Only QSOs and spots involving a station within this distance are shown.</p>
+<p><strong>Fixed checkbox</strong></p>
+<ul>
+<li><strong>Checked (default)</strong>: Dragging the map moves only the visual display; the heatmap is not recalculated. The heatmap updates to the new center when <strong>Apply</strong> is clicked.</li>
+<li><strong>Unchecked</strong>: The heatmap updates in real time as you drag. Dragging over a large area increases rendering load.</li>
+</ul>
+<h3 id="contest-band-mode-and-power-selection">Contest, Band, Mode, and Power Selection</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Band</td>
+<td>Select band (160m / 80m / 40m / 20m / 15m / 10m / All)</td>
+</tr>
+<tr>
+<td>Mode</td>
+<td>Select mode (CW / SSB / All)</td>
+</tr>
+<tr>
+<td>Power</td>
+<td>Filter by power class (High / Low / QRP)</td>
+</tr>
+<tr>
+<td>Contest</td>
+<td>Select contest</td>
+</tr>
+</tbody>
+</table>
+<p>For single mode contests (CW-only or SSB-only), other modes cannot be selected.</p>
+<h3 id="year-selection-and-multi-year-merge">Year Selection and Multi-Year Merge</h3>
+<p>Use the <strong>Year</strong> checkboxes to select which years to display. Checking multiple years merges and overlays the data. Multi-year merge is useful for understanding overall propagation trends. Note that older public logs often lack grid locator data, so the heatmap may be empty for those years.</p>
+<p>The number of loaded records and the selected year(s) are shown in the upper right of the screen (e.g., <code>1,916,313 records (2025)</code>, <code>1,052,123 records (2024+2025)</code>).</p>
+<h3 id="time-slider">Time Slider</h3>
+<p>Drag the slider left or right to change the displayed time. The UTC time is shown in the text box on the left. You can also type a time directly (e.g., <code>14:30</code>) and press Enter or click away to jump the slider to that time.</p>
+<p>For 48-hour contests (CQ WW, CQ WPX), a <strong>+1d</strong> checkbox appears. Check it to switch to Day 2 (24 hours after contest start).</p>
+<h3 id="set-default-reset-apply-doc">Set Default / Reset / Apply / Doc</h3>
+<table>
+<thead>
+<tr>
+<th>Button</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Set Default</strong></td>
+<td>Save current settings (center grid, distance, etc.) as defaults</td>
+</tr>
+<tr>
+<td><strong>Reset</strong></td>
+<td>Restore settings to defaults</td>
+</tr>
+<tr>
+<td><strong>Apply</strong></td>
+<td>Apply the Center change</td>
+</tr>
+<tr>
+<td><strong>Doc</strong></td>
+<td>Open this user guide in a new tab (language matches browser setting)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-display-modes">5. Display Modes</h2>
+<h3 id="manual-slider">Manual (Slider)</h3>
+<p>Manually move the slider to inspect propagation at any time. The grid panels on the map and the graphs update to match the selected time.</p>
+<h3 id="play-auto-replay">Play (Auto Replay)</h3>
+<p>Click <strong>▶ Play</strong> to advance the slider automatically from contest start, animating propagation changes. Click <strong>■ Stop</strong> to pause.</p>
+<p>Playback can start from any time. For 48-hour contests, check <strong>+1d</strong> before clicking Play to start from Day 2.</p>
+<h3 id="rt-real-time">RT (Real Time)</h3>
+<p>Click <strong>⏱ RT</strong> to synchronize display with the current UTC time. Useful for checking propagation during a live contest.</p>
+<p>For 48-hour contests, use the <strong>+1d</strong> checkbox to switch between Day 1 and Day 2. On the actual contest weekend, the correct day is selected automatically.</p>
+<hr />
+<h2 id="6-azimuthal-map">6. Azimuthal Map</h2>
+<p><img src="images/sc4.png" alt="QSO heatmap" style="max-width:100%;width:960px;"></p>
+<h3 id="what-is-an-azimuthal-equidistant-map">What is an Azimuthal Equidistant Map?</h3>
+<p>An Azimuthal Equidistant Map accurately represents distance and bearing from the center point. Any straight line from the center traces a great circle (shortest path). Concentric circles indicate distance (km) from the center.</p>
+<h3 id="qso-heatmap">QSO Heatmap</h3>
+<p>A colored rectangle placed on the map for each 4-character grid locator is called a <strong>grid panel</strong>. QSO counts near the selected time are aggregated per grid and displayed as the grid panel color.</p>
+<ul>
+<li>Color gradient: <strong>low (green) → yellow → orange → high (red)</strong></li>
+<li>The <strong>QSO</strong> color scale bar in the upper left shows the color-to-count mapping</li>
+</ul>
+<h3 id="rbn-heatmap">RBN Heatmap</h3>
+<p>Available only for contests with a CW mode. Switching to an SSB contest automatically unchecks and disables the RBN checkbox. When the <strong>RBN</strong> checkbox is ON, RBN spot data is shown as magenta-toned grid panels.</p>
+<p><img src="images/sc5.png" alt="RBN heatmap" style="max-width:100%;width:960px;"></p>
+<ul>
+<li>Color gradient: <strong>low (dark purple) → magenta → high (white)</strong></li>
+<li>The <strong>RBN</strong> color scale bar in the upper left shows the mapping</li>
+</ul>
+<h3 id="out-of-range-grid-markers">Out-of-Range Grid Markers</h3>
+<p>Grids outside the map's display circle are shown as triangular markers on the circle's perimeter, indicating their bearing. QSO data uses white-toned triangles; RBN data uses magenta-toned triangles. Multiple grids in the same direction are offset slightly. Markers blink when active.</p>
+<h3 id="gray-line-daynight-terminator">Gray Line (Day/Night Terminator)</h3>
+<p>The solar terminator at the displayed time is shown as an orange band. The gray line has a strong correlation with propagation conditions, especially on lower bands.</p>
+<h3 id="bottom-right-overlay">Bottom-Right Overlay</h3>
+<p><img src="images/sc6.png" alt="Bottom-right overlay" style="max-width:100%;width:162px;"></p>
+<p>The following information is shown in the bottom-right overlay:</p>
+<pre><code class="language-no-copy">0/21 (  0.0%)        ← QSO: out-of-range grids / total grids (ratio)
+0/17 (  0%)          ← RBN: out-of-range grids / total grids (ratio)
+Center: PM52
+Radius: 20,000km
+21 grids · 24 QSOs   ← visible grids and QSO count
+17 grids · 23 spots  ← visible RBN grids and spot count
+</code></pre>
+<p>The large number (numerator) shows <strong>grids outside the display circle</strong>. A non-zero value blinks to indicate off-screen data. Hover over any row for a detailed tooltip. Click the overlay to reset the display radius (Radius) to its default value.</p>
+<h3 id="tooltips">Tooltips</h3>
+<p>Hover over a grid panel on the map to see detailed information in a tooltip:</p>
+<ul>
+<li><strong>Grid name</strong> (bold)</li>
+<li>QSO count per selected year (e.g., <code>2024: 12 QSO</code>); listed by year when multiple years are selected</li>
+<li>When RBN is enabled, spot count shown in magenta (e.g., <code>RBN: 5</code>)</li>
+</ul>
+<hr />
+<h2 id="7-graph-panel">7. Graph Panel</h2>
+<p><img src="images/sc7.png" alt="Graph panel" style="max-width:100%;width:700px;"></p>
+<p>The graph panel shows four graphs, all covering <strong>±3 hours from the current display time</strong>.</p>
+<h3 id="qsos-3h">QSOs (±3h)</h3>
+<p>QSO count per time step from contest logs, shown as a line graph by band. A vertical dotted line marks the current display time.</p>
+<h3 id="rbn-spots-3h">RBN Spots (±3h)</h3>
+<p>Spot count per time step from RBN data, shown as a line graph by band.</p>
+<h3 id="grids-3h">Grids (±3h)</h3>
+<p>Active grid count (unique grids) per time step from contest logs, shown by band.</p>
+<h3 id="rbn-grids-3h">RBN Grids (±3h)</h3>
+<p>Active grid count per time step from RBN data, shown by band.</p>
+<h3 id="band-colors">Band Colors</h3>
+<table>
+<thead>
+<tr>
+<th>Band</th>
+<th>Color</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10m</td>
+<td>Red</td>
+</tr>
+<tr>
+<td>15m</td>
+<td>Orange</td>
+</tr>
+<tr>
+<td>20m</td>
+<td>Blue</td>
+</tr>
+<tr>
+<td>40m</td>
+<td>Yellow</td>
+</tr>
+<tr>
+<td>80m</td>
+<td>Green</td>
+</tr>
+<tr>
+<td>160m</td>
+<td>Purple</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tooltips_1">Tooltips</h3>
+<p>Hover over a graph to see band-by-band values for that time in a tooltip.</p>
+<hr />
+<h2 id="8-crawl-mode-automatic-band-cycling">8. Crawl Mode (Automatic Band Cycling)</h2>
+<p><img src="images/sc8.png" alt="Crawl mode" style="max-width:100%;width:1400px;"></p>
+<p>In <a href="#rtreal-time">RT (Real Time)</a> mode, Crawl cycles through bands automatically at a set interval.</p>
+<h3 id="auto-all-no">Auto / All / No</h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Auto</strong></td>
+<td>Cycles through bands in descending QSO order, skipping bands with less than 15% of total QSOs near the center grid. Focuses on active bands.</td>
+</tr>
+<tr>
+<td><strong>All</strong></td>
+<td>Cycles through all bands (10m / 15m / 20m / 40m / 80m / 160m) in order</td>
+</tr>
+<tr>
+<td><strong>No</strong></td>
+<td>No automatic cycling; band and mode remain fixed</td>
+</tr>
+</tbody>
+</table>
+<p>For single mode contests (CW-only or SSB-only), Crawl cycles only through the locked mode and does not switch to other modes.</p>
+<h3 id="crawl-timer">Crawl Timer</h3>
+<p>Use <strong>Crawl Timer</strong> to set how long each band is displayed (5s / 10s / 15s).</p>
+<hr />
+<h2 id="9-data">9. Data</h2>
+<h3 id="supported-contests-and-coverage">Supported Contests and Coverage</h3>
+<table>
+<thead>
+<tr>
+<th>Contest</th>
+<th>Period</th>
+<th>Duration</th>
+<th>RBN Data</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IARU HF</td>
+<td>Second full weekend of July (starts Sat 12Z)</td>
+<td>24h</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>CQ WW CW</td>
+<td>Last full weekend of November (starts Sat 00Z)</td>
+<td>48h</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>CQ WW SSB</td>
+<td>Last full weekend of October (starts Sat 00Z)</td>
+<td>48h</td>
+<td>No</td>
+</tr>
+<tr>
+<td>CQ WPX CW</td>
+<td>Last full weekend of May (starts Sat 00Z)</td>
+<td>48h</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>CQ WPX SSB</td>
+<td>Last full weekend of March (starts Sat 00Z)</td>
+<td>48h</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h3 id="about-rbn-data">About RBN Data</h3>
+<p>RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW).</p>
+<h3 id="about-ssn-sunspot-number">About SSN (Sunspot Number)</h3>
+<p><code>SN_m_tot_V2.0.txt</code> (monthly sunspot number data provided by SILSO) is used to automatically resolve the SSN for the contest month and apply it during data processing (planned — not yet implemented). To update to the latest data, download from <a href="https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt">SILSO</a> and overwrite <code>~/heatmap/contest_logs/SN_m_tot_V2.0.txt</code>.</p>
+<hr />
+<h2 id="10-advance-data-preparation">10. Advance Data Preparation</h2>
+<p>PropMap requires data to be built in advance. The data is too large to include with the tool, so users must prepare it themselves.</p>
+<h3 id="data-processing-pipeline">Data Processing Pipeline</h3>
+<p>Contest log processing order:</p>
+<pre><code class="language-no-copy">Cabrillo logs (raw/*.txt)
+    ↓
+step1_collect_logs_fast.py   Collect and download public logs
+    ↓
+step3_grid_survey.py         Survey grid locator coverage in logs
+    ↓
+step4_crosscheck.py          Cross-check QSO pairs and generate CSV
+    ↓
+step5_aggregate.py           CSV → JSON aggregation (for heatmap.html)
+</code></pre>
+<p>RBN data processing order:</p>
+<pre><code class="language-no-copy">RBN raw data (rbn/raw/YYYYMMDD.zip)
+    ↓
+download_rbn.py              Download RBN raw data
+    ↓
+make_spotted_grids.py        Extract spotted grids
+    ↓
+step4_rbn.py                 Generate RBN pair CSV
+    ↓
+step5_rbn.py                 CSV → JSON aggregation (for heatmap.html)
+</code></pre>
+<h3 id="batch-regeneration-of-all-data">Batch Regeneration of All Data</h3>
+<h4 id="macos-wsl2-generate_allsh">macOS / WSL2 (generate_all.sh)</h4>
+<p>First, navigate to the contest_logs directory:</p>
+<pre><code class="language-bash">cd ~/heatmap/contest_logs
+</code></pre>
+<p>Preview targets only (no execution):</p>
+<pre><code class="language-bash">bash generate_all.sh --dry-run
+</code></pre>
+<p>Execute:</p>
+<pre><code class="language-bash">bash generate_all.sh
+</code></pre>
+<p>To run in the background:</p>
+<pre><code class="language-bash">nohup bash generate_all.sh &gt; gen.log 2&gt;&amp;1 &amp;
+</code></pre>
+<p>Monitor progress:</p>
+<pre><code class="language-bash">tail -f gen.log
+</code></pre>
+<h4 id="windows-generate_allbat">Windows (generate_all.bat)</h4>
+<p>Open Command Prompt and navigate to the contest_logs directory:</p>
+<pre><code>cd %USERPROFILE%\heatmap\contest_logs
+</code></pre>
+<p>Preview targets only (no execution):</p>
+<pre><code>generate_all.bat --dry-run
+</code></pre>
+<p>Execute:</p>
+<pre><code>generate_all.bat
+</code></pre>
+<h3 id="updating-sn_m_tot_v20txt">Updating SN_m_tot_V2.0.txt</h3>
+<p>Sunspot number data is updated periodically. Download the latest from <a href="https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt">SILSO</a> and overwrite <code>~/heatmap/contest_logs/SN_m_tot_V2.0.txt</code>.</p>
+<h3 id="script-reference">Script Reference</h3>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>contest_utils.py</code></td>
+<td>Common utilities: contest definitions, path resolution, SSN auto-resolution</td>
+</tr>
+<tr>
+<td><code>step1_collect_logs_fast.py</code></td>
+<td>Collect and download public logs</td>
+</tr>
+<tr>
+<td><code>step3_grid_survey.py</code></td>
+<td>Survey grid locator coverage in log files</td>
+</tr>
+<tr>
+<td><code>step4_crosscheck.py</code></td>
+<td>QSO cross-check and pair CSV generation</td>
+</tr>
+<tr>
+<td><code>step4_rbn.py</code></td>
+<td>RBN data processing and pair CSV generation</td>
+</tr>
+<tr>
+<td><code>step5_aggregate.py</code></td>
+<td>QSO pair CSV → heatmap JSON</td>
+</tr>
+<tr>
+<td><code>step5_rbn.py</code></td>
+<td>RBN pair CSV → heatmap JSON</td>
+</tr>
+<tr>
+<td><code>make_spotted_grids.py</code></td>
+<td>Extract RBN spotted grids</td>
+</tr>
+<tr>
+<td><code>download_rbn.py</code></td>
+<td>Download RBN raw data (zip)</td>
+</tr>
+<tr>
+<td><code>extract_json.py</code></td>
+<td>Extract records from large JSON by condition</td>
+</tr>
+<tr>
+<td><code>generate_all.sh</code></td>
+<td>Batch regeneration for all contests and years (macOS/Linux)</td>
+</tr>
+<tr>
+<td><code>generate_all.bat</code></td>
+<td>Batch regeneration for all contests and years (Windows)</td>
+</tr>
+</tbody>
+</table>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  if (pre.querySelector('code.language-no-copy')) return;
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  btn.addEventListener('click', () => {
+    const code = pre.querySelector('code');
+    const text = code ? code.textContent : pre.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>

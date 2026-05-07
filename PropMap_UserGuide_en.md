@@ -1,0 +1,471 @@
+# PropMap User Guide
+
+---
+
+## 1. Introduction
+
+### What is PropMap?
+
+PropMap is a tool that aggregates public contest log data from amateur radio contests and RBN (Reverse Beacon Network) spot data, then visualizes past HF band propagation conditions as a heatmap on an Azimuthal Equidistant Map centered on a specified grid locator (also known as grid square or Maidenhead locator; this guide uses the term "grid locator" throughout). Based on historical data, it is useful for understanding propagation trends during contests held at the same time of year. Past data can be replayed, and by synchronizing the playback time with real time, you can reference historical data for the same time of day in real time.
+
+Useful for planning contest operations, identifying optimal band-change timing, analyzing propagation trends from past contests, and real-time reference during live contests.
+
+### System Requirements
+
+- macOS Tahoe / Windows 11 (tested)
+- Python 3 (see "[Python 3 Installation](#python-3-installation)" for setup)
+- Modern browser (Safari, Chrome, Edge, etc.)
+- JSON data files for the contest you want to view (must be placed in `~/heatmap/data/`). [Data must be built in advance — see Section 10](#10-advance-data-preparation)
+
+### Prerequisites
+- Obtain public logs for the contest you want to reference
+- Grid locator must be correctly filled in the log header (**GRID-LOCATOR**) — 4 characters are sufficient
+- Grid locator estimation from callsign is not currently implemented
+- RBN raw data (if using RBN)
+- RBN data uses CW mode only
+- RBN spots used are limited to stations whose grid locator is recorded in the public logs
+- Only QSOs that pass cross-checking between public logs and where both stations' grid locators are known are included
+- Cross-check criteria: both logs list the other station on the same band within 15 minutes; exchange number correctness is not checked
+- Callsign matching: exact match or up to 2 character differences are accepted
+- Band mismatch correction: if bands differ, the band with more QSOs within 15 minutes of each station's logged time is used as the correct band
+
+---
+
+## 2. Setup
+
+### Python 3 Installation
+
+#### macOS Tahoe
+
+macOS includes a system Python 3, but it may be replaced by OS updates and `pip` is awkward to use. Homebrew Python is recommended so that additional packages can easily be installed with `pip` when needed by the data processing scripts.
+
+1. Install Homebrew (if not already installed):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+2. Install Python 3:
+```bash
+brew install python3
+```
+3. Verify installation:
+```bash
+python3 --version
+```
+
+#### Windows 11 — Without WSL2
+
+The viewer and full data-building pipeline work with Python for Windows and the included `generate_all.bat`. Since `generate_all.sh` is a bash script and cannot be run directly on Windows, use the equivalent `generate_all.bat` instead.
+
+1. Download the Windows installer from [python.org](https://www.python.org/downloads/)
+2. During installation, **check "Add Python to PATH"** (it is unchecked by default — this step is required)
+3. Verify installation (Command Prompt):
+```
+python --version
+```
+
+> **Note:** On Windows, use `python` instead of `python3`
+
+Place files at `%USERPROFILE%\heatmap\` (e.g., `C:\Users\YourName\heatmap\`)
+
+#### Windows 11 — With WSL2
+
+With WSL2, shell scripts work as-is and the experience is equivalent to macOS. For WSL2 setup, refer to the [Microsoft official documentation](https://learn.microsoft.com/en-us/windows/wsl/install). After installing Ubuntu:
+
+```bash
+sudo apt update && sudo apt install -y python3 python3-pip
+```
+
+All subsequent steps are the same as macOS. Place files under the WSL2 home directory (`~/heatmap/`). Access the browser on the Windows side at `http://localhost:8765`.
+
+---
+
+### File Structure
+
+``` { .no-copy }
+~/heatmap/
+├── heatmap.html              Main application (self-contained single file)
+├── start_heatmap.command     Launcher (macOS)
+├── start_heatmap.bat         Launcher (Windows)
+├── countries-50m.json        Terrain data
+├── data/
+│   ├── {contest}_{year}.json         QSO data (10-minute resolution)
+│   └── {contest}_{year}_rbn.json     RBN data (10-minute resolution)
+└── contest_logs/
+    ├── raw/{contest}_{year}/*.txt     Public Cabrillo logs
+    ├── csv/                           Processed CSV files
+    ├── rbn/                           RBN data
+    ├── SN_m_tot_V2.0.txt              Sunspot number data (SILSO)
+    ├── *.py                           Data processing scripts
+    ├── generate_all.sh                Batch regeneration script (macOS/Linux)
+    └── generate_all.bat               Batch regeneration script (Windows)
+```
+
+### Launching the Application
+
+**macOS / Windows (with WSL2)**
+
+Double-click `start_heatmap.command`, or run the following in a terminal. When double-clicked, a terminal opens and the default browser launches automatically — no need to open the browser separately. Closing the terminal window stops the server.
+
+```bash
+python3 -m http.server 8765 --directory ~/heatmap
+```
+
+**Windows (without WSL2)**
+
+Double-click `start_heatmap.bat`, or run the following in Command Prompt:
+
+```
+python -m http.server 8765 --directory %USERPROFILE%\heatmap
+```
+
+After launching, open `http://localhost:8765` in your browser.
+
+> **Note:** A local file server is required — opening `heatmap.html` directly in a browser will not work.
+
+---
+
+## 3. Screen Layout
+
+<img src="images/sc1.png" alt="Full screen" style="max-width:100%;width:1400px;">
+
+The screen is divided into two main areas.
+
+**Azimuthal Map Area (left or top)**
+Displays the heatmap on an Azimuthal Equidistant Map centered on the selected grid locator.
+
+**Control + Graph Area (right or bottom)**
+Contains display settings and time-series graphs showing QSO counts and active grid counts over ±3 hours.
+
+### Responsive Layout
+
+The layout switches automatically based on browser window width.
+
+When the browser window is wide (desktop, laptop, etc.), the map area and control + graph area appear side by side. When narrow (tablet portrait, smartphone, or a resized window), they stack vertically.
+
+<img src="images/sc2.png" alt="Stacked layout" style="max-width:100%;width:550px;">
+
+In stacked mode, the map fills the full window width, and the graph height is limited to 2.2× the map height.
+
+---
+
+## 4. Basic Operation
+
+<img src="images/sc3.png" alt="Control panel" style="max-width:100%;width:700px;">
+
+### Center Grid and Display Range
+
+**Center (center grid)**
+Enter a 4-character grid locator (e.g., PM52). Click **Apply** or press Enter to apply. You can also drag the map to position the desired area at the center, then click **Apply**.
+
+**Dist (distance filter)**
+Use the slider to set the display radius from the center grid (km). Only QSOs and spots involving a station within this distance are shown.
+
+**Fixed checkbox**
+
+- **Checked (default)**: Dragging the map moves only the visual display; the heatmap is not recalculated. The heatmap updates to the new center when **Apply** is clicked.
+- **Unchecked**: The heatmap updates in real time as you drag. Dragging over a large area increases rendering load.
+
+### Contest, Band, Mode, and Power Selection
+
+| Item | Description |
+|---|---|
+| Band | Select band (160m / 80m / 40m / 20m / 15m / 10m / All) |
+| Mode | Select mode (CW / SSB / All) |
+| Power | Filter by power class (High / Low / QRP) |
+| Contest | Select contest |
+
+For single mode contests (CW-only or SSB-only), other modes cannot be selected.
+
+### Year Selection and Multi-Year Merge
+
+Use the **Year** checkboxes to select which years to display. Checking multiple years merges and overlays the data. Multi-year merge is useful for understanding overall propagation trends. Note that older public logs often lack grid locator data, so the heatmap may be empty for those years.
+
+The number of loaded records and the selected year(s) are shown in the upper right of the screen (e.g., `1,916,313 records (2025)`, `1,052,123 records (2024+2025)`).
+
+### Time Slider
+
+Drag the slider left or right to change the displayed time. The UTC time is shown in the text box on the left. You can also type a time directly (e.g., `14:30`) and press Enter or click away to jump the slider to that time.
+
+For 48-hour contests (CQ WW, CQ WPX), a **+1d** checkbox appears. Check it to switch to Day 2 (24 hours after contest start).
+
+### Set Default / Reset / Apply / Doc
+
+| Button | Action |
+|---|---|
+| **Set Default** | Save current settings (center grid, distance, etc.) as defaults |
+| **Reset** | Restore settings to defaults |
+| **Apply** | Apply the Center change |
+| **Doc** | Open this user guide in a new tab (language matches browser setting) |
+
+---
+
+## 5. Display Modes
+
+### Manual (Slider)
+
+Manually move the slider to inspect propagation at any time. The grid panels on the map and the graphs update to match the selected time.
+
+### Play (Auto Replay)
+
+Click **▶ Play** to advance the slider automatically from contest start, animating propagation changes. Click **■ Stop** to pause.
+
+Playback can start from any time. For 48-hour contests, check **+1d** before clicking Play to start from Day 2.
+
+### RT (Real Time)
+
+Click **⏱ RT** to synchronize display with the current UTC time. Useful for checking propagation during a live contest.
+
+For 48-hour contests, use the **+1d** checkbox to switch between Day 1 and Day 2. On the actual contest weekend, the correct day is selected automatically.
+
+---
+
+## 6. Azimuthal Map
+
+<img src="images/sc4.png" alt="QSO heatmap" style="max-width:100%;width:960px;">
+
+### What is an Azimuthal Equidistant Map?
+
+An Azimuthal Equidistant Map accurately represents distance and bearing from the center point. Any straight line from the center traces a great circle (shortest path). Concentric circles indicate distance (km) from the center.
+
+### QSO Heatmap
+
+A colored rectangle placed on the map for each 4-character grid locator is called a **grid panel**. QSO counts near the selected time are aggregated per grid and displayed as the grid panel color.
+
+- Color gradient: **low (green) → yellow → orange → high (red)**
+- The **QSO** color scale bar in the upper left shows the color-to-count mapping
+
+### RBN Heatmap
+
+Available only for contests with a CW mode. Switching to an SSB contest automatically unchecks and disables the RBN checkbox. When the **RBN** checkbox is ON, RBN spot data is shown as magenta-toned grid panels.
+
+<img src="images/sc5.png" alt="RBN heatmap" style="max-width:100%;width:960px;">
+
+- Color gradient: **low (dark purple) → magenta → high (white)**
+- The **RBN** color scale bar in the upper left shows the mapping
+
+### Out-of-Range Grid Markers
+
+Grids outside the map's display circle are shown as triangular markers on the circle's perimeter, indicating their bearing. QSO data uses white-toned triangles; RBN data uses magenta-toned triangles. Multiple grids in the same direction are offset slightly. Markers blink when active.
+
+### Gray Line (Day/Night Terminator)
+
+The solar terminator at the displayed time is shown as an orange band. The gray line has a strong correlation with propagation conditions, especially on lower bands.
+
+### Bottom-Right Overlay
+
+<img src="images/sc6.png" alt="Bottom-right overlay" style="max-width:100%;width:162px;">
+
+The following information is shown in the bottom-right overlay:
+
+``` { .no-copy }
+0/21 (  0.0%)        ← QSO: out-of-range grids / total grids (ratio)
+0/17 (  0%)          ← RBN: out-of-range grids / total grids (ratio)
+Center: PM52
+Radius: 20,000km
+21 grids · 24 QSOs   ← visible grids and QSO count
+17 grids · 23 spots  ← visible RBN grids and spot count
+```
+
+The large number (numerator) shows **grids outside the display circle**. A non-zero value blinks to indicate off-screen data. Hover over any row for a detailed tooltip. Click the overlay to reset the display radius (Radius) to its default value.
+
+### Tooltips
+
+Hover over a grid panel on the map to see detailed information in a tooltip:
+
+- **Grid name** (bold)
+- QSO count per selected year (e.g., `2024: 12 QSO`); listed by year when multiple years are selected
+- When RBN is enabled, spot count shown in magenta (e.g., `RBN: 5`)
+
+---
+
+## 7. Graph Panel
+
+<img src="images/sc7.png" alt="Graph panel" style="max-width:100%;width:700px;">
+
+The graph panel shows four graphs, all covering **±3 hours from the current display time**.
+
+### QSOs (±3h)
+
+QSO count per time step from contest logs, shown as a line graph by band. A vertical dotted line marks the current display time.
+
+### RBN Spots (±3h)
+
+Spot count per time step from RBN data, shown as a line graph by band.
+
+### Grids (±3h)
+
+Active grid count (unique grids) per time step from contest logs, shown by band.
+
+### RBN Grids (±3h)
+
+Active grid count per time step from RBN data, shown by band.
+
+### Band Colors
+
+| Band | Color |
+|---|---|
+| 10m | Red |
+| 15m | Orange |
+| 20m | Blue |
+| 40m | Yellow |
+| 80m | Green |
+| 160m | Purple |
+
+### Tooltips
+
+Hover over a graph to see band-by-band values for that time in a tooltip.
+
+---
+
+## 8. Crawl Mode (Automatic Band Cycling)
+
+<img src="images/sc8.png" alt="Crawl mode" style="max-width:100%;width:1400px;">
+
+In [RT (Real Time)](#rtreal-time) mode, Crawl cycles through bands automatically at a set interval.
+
+### Auto / All / No
+
+| Setting | Behavior |
+|---|---|
+| **Auto** | Cycles through bands in descending QSO order, skipping bands with less than 15% of total QSOs near the center grid. Focuses on active bands. |
+| **All** | Cycles through all bands (10m / 15m / 20m / 40m / 80m / 160m) in order |
+| **No** | No automatic cycling; band and mode remain fixed |
+
+For single mode contests (CW-only or SSB-only), Crawl cycles only through the locked mode and does not switch to other modes.
+
+### Crawl Timer
+
+Use **Crawl Timer** to set how long each band is displayed (5s / 10s / 15s).
+
+---
+
+## 9. Data
+
+### Supported Contests and Coverage
+
+| Contest | Period | Duration | RBN Data |
+|---|---|---|---|
+| IARU HF | Second full weekend of July (starts Sat 12Z) | 24h | Yes |
+| CQ WW CW | Last full weekend of November (starts Sat 00Z) | 48h | Yes |
+| CQ WW SSB | Last full weekend of October (starts Sat 00Z) | 48h | No |
+| CQ WPX CW | Last full weekend of May (starts Sat 00Z) | 48h | Yes |
+| CQ WPX SSB | Last full weekend of March (starts Sat 00Z) | 48h | No |
+
+### About RBN Data
+
+RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW).
+
+### About SSN (Sunspot Number)
+
+`SN_m_tot_V2.0.txt` (monthly sunspot number data provided by SILSO) is used to automatically resolve the SSN for the contest month and apply it during data processing (planned — not yet implemented). To update to the latest data, download from [SILSO](https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt) and overwrite `~/heatmap/contest_logs/SN_m_tot_V2.0.txt`.
+
+---
+
+## 10. Advance Data Preparation
+
+PropMap requires data to be built in advance. The data is too large to include with the tool, so users must prepare it themselves.
+
+### Data Processing Pipeline
+
+Contest log processing order:
+
+``` { .no-copy }
+Cabrillo logs (raw/*.txt)
+    ↓
+step1_collect_logs_fast.py   Collect and download public logs
+    ↓
+step3_grid_survey.py         Survey grid locator coverage in logs
+    ↓
+step4_crosscheck.py          Cross-check QSO pairs and generate CSV
+    ↓
+step5_aggregate.py           CSV → JSON aggregation (for heatmap.html)
+```
+
+RBN data processing order:
+
+``` { .no-copy }
+RBN raw data (rbn/raw/YYYYMMDD.zip)
+    ↓
+download_rbn.py              Download RBN raw data
+    ↓
+make_spotted_grids.py        Extract spotted grids
+    ↓
+step4_rbn.py                 Generate RBN pair CSV
+    ↓
+step5_rbn.py                 CSV → JSON aggregation (for heatmap.html)
+```
+
+### Batch Regeneration of All Data
+
+#### macOS / WSL2 (generate_all.sh)
+
+First, navigate to the contest_logs directory:
+
+```bash
+cd ~/heatmap/contest_logs
+```
+
+Preview targets only (no execution):
+
+```bash
+bash generate_all.sh --dry-run
+```
+
+Execute:
+
+```bash
+bash generate_all.sh
+```
+
+To run in the background:
+
+```bash
+nohup bash generate_all.sh > gen.log 2>&1 &
+```
+
+Monitor progress:
+
+```bash
+tail -f gen.log
+```
+
+#### Windows (generate_all.bat)
+
+Open Command Prompt and navigate to the contest_logs directory:
+
+```
+cd %USERPROFILE%\heatmap\contest_logs
+```
+
+Preview targets only (no execution):
+
+```
+generate_all.bat --dry-run
+```
+
+Execute:
+
+```
+generate_all.bat
+```
+
+### Updating SN_m_tot_V2.0.txt
+
+Sunspot number data is updated periodically. Download the latest from [SILSO](https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt) and overwrite `~/heatmap/contest_logs/SN_m_tot_V2.0.txt`.
+
+### Script Reference
+
+| Script | Role |
+|---|---|
+| `contest_utils.py` | Common utilities: contest definitions, path resolution, SSN auto-resolution |
+| `step1_collect_logs_fast.py` | Collect and download public logs |
+| `step3_grid_survey.py` | Survey grid locator coverage in log files |
+| `step4_crosscheck.py` | QSO cross-check and pair CSV generation |
+| `step4_rbn.py` | RBN data processing and pair CSV generation |
+| `step5_aggregate.py` | QSO pair CSV → heatmap JSON |
+| `step5_rbn.py` | RBN pair CSV → heatmap JSON |
+| `make_spotted_grids.py` | Extract RBN spotted grids |
+| `download_rbn.py` | Download RBN raw data (zip) |
+| `extract_json.py` | Extract records from large JSON by condition |
+| `generate_all.sh` | Batch regeneration for all contests and years (macOS/Linux) |
+| `generate_all.bat` | Batch regeneration for all contests and years (Windows) |

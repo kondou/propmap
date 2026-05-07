@@ -1,0 +1,2977 @@
+<!--
+MIT License
+
+Copyright (c) 2026 Katsuhiro Kondou, JH5GHM
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>HF Propagation Heatmap</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: #111; color: #ccc; font-family: system-ui, sans-serif; font-size: 13px;
+  display:flex; flex-direction:column; overflow:hidden; }
+#app { flex:1; display:flex; flex-direction:column; padding:6px; min-height:0; overflow:hidden; }
+.cg { display: flex; align-items: center; gap: 4px; flex-shrink:0; }
+label { color: #888; font-size: 11px; }
+select { font-size: 11px; background:#1a2535; color:#ddd; border:1px solid #334; border-radius:3px; }
+input[type=text] { font-size: 12px; width: 68px; padding: 2px 4px;
+  background:#1a2535; border:1px solid #334; color:#ddd; border-radius:3px; }
+input[type=range] { accent-color: #4af; }
+input[type=checkbox] { accent-color: #4af; cursor:pointer; }
+button { font-size:11px; padding:2px 9px; background:#1a2535;
+  border:1px solid #445; color:#aaa; border-radius:3px; cursor:pointer; }
+button:hover { background:#253040; }
+#btn-apply { transition: background 0.2s, border-color 0.2s, color 0.2s; }
+#btn-apply.dirty { background:#4a2800; border-color:#c86000; color:#ffaa44; }
+#status { font-size:11px; color:#aaa; }
+/* メインレイアウト: 左=地図、右=コントロール+グラフ */
+/* レイアウト切り替えはJS(buildProj)側で制御する。
+   元に戻す場合: buildProj内の[レイアウト切り替え]ブロックを削除し、
+   #main-rowのflex-direction:rowと#map-wrapのalign-self:stretchを復元する。 */
+#main-row { display:flex; gap:8px; min-height:0; overflow:hidden; }
+/* 左: 地図（常に正方形） */
+#map-wrap { position:relative; flex:none; user-select:none; overflow:hidden; }
+canvas#cv { display:block; cursor:crosshair; }
+#overlay-info {
+  position:absolute; bottom:8px; right:8px;
+  background:rgba(0,0,0,0.78); border:1px solid #334;
+  border-radius:4px; padding:4px 8px; font-size:11px; color:#aaa;
+  pointer-events:auto; line-height:1.7; max-width:220px;
+  cursor:pointer;
+}
+/* 右: コントロール+グラフ */
+#right-col { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; overflow:visible; justify-content:flex-start; align-items:stretch; }
+#controls { display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
+.ctrl-row { display:flex; flex-wrap:nowrap; gap:6px; align-items:center; }
+#charts-col { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; min-height:0; overflow:visible; }
+.chart-box { flex:1; min-height:0; background:#0a0f18; border:1px solid #223; border-radius:4px; padding:4px 4px 4px 4px; display:flex; flex-direction:column; }
+.chart-wrap { position:relative; flex:1; min-height:0; }
+.chart-row { display:flex; flex:1; min-height:0; }
+.band-labels { width:36px; flex-shrink:0; position:relative; font-size:9px; font-weight:bold; }
+.band-label-item { position:absolute; right:2px; transform:translateY(-50%); white-space:nowrap; }
+.chart-bg { display:block; width:100%; height:100%; }
+.chart-ov { position:absolute; top:0; left:0; pointer-events:none; display:block; }
+#band-legend { display:none; }
+.band-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:2px; }
+#legend { display:none; }
+#grad-bar { width:100px; height:8px; border-radius:2px;
+  background:linear-gradient(to right,#0050dc,#00c8dc,#00d264,#dcd200,#e66400,#d20000); }
+#hint { display:none; }
+#rtplay-day { font-size:11px; }
+/* 実行中ボタンの点滅 */
+@keyframes btn-pulse {
+  0%,100% { opacity:1; }
+  50% { opacity:0.45; }
+}
+.btn-running {
+  animation: btn-pulse 1.6s ease-in-out infinite;
+  border-color: #4af !important;
+  color: #4af !important;
+  background: #0a1a2f !important;
+}
+.btn-running-rt {
+  animation: btn-pulse 1.6s ease-in-out infinite;
+  border-color: #4fa !important;
+  color: #4fa !important;
+  background: #0a2010 !important;
+}
+/* ツールチップ */
+.tt { cursor:default; }
+#ui-tooltip {
+  display:none; position:fixed; pointer-events:none; z-index:9999;
+  background:rgba(20,28,44,0.97); border:1px solid #445;
+  border-radius:3px; padding:3px 8px; font-size:10px; color:#bbc;
+  line-height:1.5; white-space:nowrap; max-width:280px; white-space:normal;
+}
+/* year-panelのチェックボックス行（横スクロール・1行固定） */
+#year-panel { display:flex; flex-wrap:nowrap; gap:1px 6px; align-items:center;
+  overflow-x:auto; overflow-y:hidden; scrollbar-width:thin;
+  scrollbar-color:#334 transparent; }
+#year-panel::-webkit-scrollbar { height:4px; }
+#year-panel::-webkit-scrollbar-track { background:transparent; }
+#year-panel::-webkit-scrollbar-thumb { background:#334; border-radius:2px; }
+.year-item { display:flex; align-items:center; gap:3px;
+  cursor:pointer; font-size:11px; color:#ddd; white-space:nowrap;
+  padding:1px 2px; border-radius:2px; flex-shrink:0; }
+.year-item:hover { background:#253040; }
+.year-item input { accent-color:#4af; cursor:pointer; margin:0; }
+/* グラフタイトル */
+.chart-title { font-size:10px; color:#99a; margin-bottom:2px; flex-shrink:0; }
+</style>
+</head>
+<body>
+<div id="ui-tooltip"></div>
+<div id="app">
+<div id="main-row" style="flex:1;min-height:0;display:flex;gap:8px;">
+  <div id="map-wrap">
+    <canvas id="cv"></canvas>
+    <div id="map-legend" class="tt" data-tip-key="legend_color" style="position:absolute;top:8px;left:8px;
+      background:rgba(0,0,0,0.70);border:1px solid #334;border-radius:4px;
+      padding:4px 8px;font-size:10px;color:#aaa;pointer-events:auto;line-height:1.8;">
+      <div><span>QSO</span> <canvas id="grad-bar-qso" width="80" height="7" style="vertical-align:middle;border-radius:2px;"></canvas> <span>low→high</span></div>
+      <div id="rbn-legend-row" style="display:none;"><span>RBN</span> <canvas id="grad-bar-rbn" width="80" height="7" style="vertical-align:middle;border-radius:2px;"></canvas> <span>low→high</span></div>
+    </div>
+    <div id="map-bright" class="tt" data-tip-key="map_bright" data-tip-above="1" style="position:absolute;bottom:8px;left:8px;
+      background:rgba(0,0,0,0.70);border:1px solid #334;border-radius:4px;
+      padding:4px 8px;font-size:10px;color:#aaa;pointer-events:auto;line-height:1.8;">
+      <label style="color:#aaa;font-size:10px;">Map</label>
+      <input type="range" id="sld-bright" min="50" max="300" value="150" step="10" style="width:80px;vertical-align:middle;">
+      <span id="lbl-bright" style="font-size:10px;color:#aaa;">150%</span>
+    </div>
+    <div id="overlay-info" style="position:absolute;bottom:8px;right:8px;cursor:pointer;">
+      <div id="ov-offscreen" class="tt" data-tip-ov="qso" style="font-size:16px;font-weight:bold;text-align:right;
+        font-family:monospace;line-height:1.4;margin-bottom:2px;white-space:pre;"></div>
+      <div id="ov-rbn-stat" class="tt" data-tip-ov="rbn" style="font-size:16px;font-weight:bold;text-align:right;
+        font-family:monospace;line-height:1.4;margin-bottom:4px;white-space:pre;
+        display:none;"><span id="ov-rbn-nums" style="color:rgba(220,0,220,0.9)">-</span><span style="color:#4af">/</span><span id="ov-rbn-den" style="color:#4af">-</span><span style="color:#4af"> (</span><span id="ov-rbn-pct" style="color:rgba(220,0,220,0.9)">  -</span><span style="color:#4af">%)</span></div>
+      <div id="ov-center" class="tt" data-tip-key="ov_center">—</div>
+      <div id="ov-scale">—</div>
+      <div id="ov-info">—</div>
+      <div id="ov-rbn-info" style="display:none;font-size:11px;color:#ccc;text-align:left;"></div>
+    </div>
+    <div id="radius-ctrl" style="position:absolute;right:8px;
+      background:rgba(0,0,0,0.70);border:1px solid #334;border-radius:4px;
+      padding:3px 8px;display:flex;align-items:center;gap:6px;pointer-events:auto;">
+      <label style="color:#aaa;font-size:10px;white-space:nowrap;">R</label>
+      <input type="range" id="sld-radius" min="0" max="22" value="10" step="1"
+        style="width:100px;vertical-align:middle;"
+        class="tt" data-tip-key="map_radius" data-tip-left="1">
+      <span id="lbl-radius" style="font-size:10px;color:#aaa;min-width:52px;text-align:right;">6000km</span>
+    </div>
+    <div id="ov-bandmode" style="position:absolute;top:8px;right:8px;
+      font-size:16px;font-weight:bold;color:#fff;text-align:right;
+      pointer-events:none;line-height:1.4;"></div>
+    <div id="grid-tooltip" style="display:none;position:absolute;pointer-events:none;
+      background:rgba(0,0,0,0.85);border:1px solid #445;border-radius:4px;
+      padding:4px 8px;font-size:11px;color:#ccc;line-height:1.6;z-index:50;white-space:nowrap;"></div>
+  </div>
+  <div id="right-col">
+    <div id="controls">
+      <div class="ctrl-row">
+        <button id="btn-setdefault" class="tt" data-tip-key="set_default">Set Default</button>
+        <button id="btn-reset" class="tt" data-tip-key="btn_reset">Reset</button>
+        <span style="display:inline-block;width:16px;flex-shrink:0;"></span>
+        <label class="year-item tt" style="flex-shrink:0;" data-tip-key="chk_rbn">
+          <input type="checkbox" id="chk-rbn"> RBN
+        </label>
+        <button id="btn-doc" class="tt" data-tip-key="btn_doc" onclick="window.open(isJa?'PropMap_UserGuide_ja.html':'PropMap_UserGuide_en.html','_blank')">Doc</button>
+        <span id="status" style="font-size:11px;color:#aaa;margin-left:auto;"></span>
+      </div>
+      <div class="ctrl-row">
+        <div class="cg"><label class="tt" data-tip-key="dist_label">Dist</label>
+          <input type="range" id="sld-lon" min="100" max="3000" value="500" step="50" style="width:120px"
+            class="tt" data-tip-key="dist_slider">
+          <span id="lbl-lon" style="min-width:44px;font-size:11px;color:#aaa;">500km</span>
+        </div>
+        <div class="cg"><label class="tt" data-tip-key="center_label">Center</label>
+          <input type="text" id="inp-grid" value="JO02" class="tt" data-tip-key="inp_grid">
+          <button id="btn-apply" class="tt" data-tip-key="btn_apply">Apply</button>
+          <input type="checkbox" id="chk-fixed" checked>
+          <label for="chk-fixed" style="cursor:pointer;" class="tt" data-tip-key="chk_fixed">Fixed</label>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <div class="cg"><label>Band</label>
+          <select id="sel-band" class="tt" data-tip-key="sel_band">
+            <option value="0">All</option>
+            <option value="6">10m</option>
+            <option value="5">15m</option>
+            <option value="4" selected>20m</option>
+            <option value="3">40m</option>
+            <option value="2">80m</option>
+            <option value="1">160m</option>
+          </select>
+        </div>
+        <div class="cg"><label>Mode</label>
+          <select id="sel-mode" class="tt" data-tip-key="sel_mode">
+            <option value="0">All</option>
+            <option value="1" selected>CW</option>
+            <option value="2">SSB</option>
+          </select>
+        </div>
+        <div class="cg"><label>Power</label>
+          <select id="sel-power" class="tt" data-tip-key="sel_power">
+            <option value="0">High</option>
+            <option value="2">Low</option>
+            <option value="1">QRP</option>
+          </select>
+        </div>
+        <div class="cg"><label>Contest</label>
+          <select id="sel-contest" class="tt" data-tip-key="sel_contest">
+            <option value="iaru">IARU HF</option>
+            <option value="cqww_cw">CQ WW CW</option>
+            <option value="cqww_ssb">CQ WW SSB</option>
+            <option value="cqwpx_cw">CQ WPX CW</option>
+            <option value="cqwpx_ssb">CQ WPX SSB</option>
+          </select>
+        </div>
+      </div>
+      <div class="ctrl-row" style="align-items:center;">
+        <label class="tt" style="color:#888;font-size:11px;flex-shrink:0;margin-right:4px;" data-tip-key="year_label">Year</label>
+        <div id="year-panel" style="flex:1;min-width:0;"></div>
+      </div>
+      <div class="ctrl-row">
+        <button id="btn-rtplay" class="tt" data-tip-key="btn_rt">⏱ RT</button>
+        <button id="btn-play" class="tt" data-tip-key="btn_play">▶ Play</button>
+        <div class="cg" style="margin-left:8px;display:flex;align-items:center;gap:4px;">
+          <span id="utc-plus1d" style="display:none;font-size:11px;color:#aaa;">
+            <label style="cursor:pointer;"><input type="checkbox" id="chk-plus1d" style="margin-right:2px;">+1d</label>
+          </span>
+          <input type="text" id="inp-hour" maxlength="5"
+            style="width:44px;font-size:12px;color:#aaa;background:transparent;border:none;border-bottom:1px solid #446;text-align:center;outline:none;padding:0 2px;"
+            value="00:00">
+          <label style="font-size:12px;color:#888;margin-right:4px;">UTC</label>
+          <input type="range" id="sld-hour" min="0" max="143" value="0" step="1" style="width:160px">
+        </div>
+      </div>
+      <div class="ctrl-row" id="row-cycle">
+        <label class="tt" style="color:#888;font-size:11px;flex-shrink:0;margin-right:4px;" data-tip-key="crawl_label">Crawl</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <label class="year-item tt" data-tip-key="crawl_auto"><input type="radio" name="rt-cycle" value="auto"> Auto</label>
+          <label class="year-item tt" data-tip-key="crawl_all"><input type="radio" name="rt-cycle" value="all"> All</label>
+          <label class="year-item tt" data-tip-key="crawl_none"><input type="radio" name="rt-cycle" value="none" checked> No</label>
+          <span style="color:#888;font-size:11px;margin-left:6px;margin-right:2px;">Crawl Timer</span>
+          <label class="year-item tt" data-tip-key="crawl_5s"><input type="radio" name="rt-crawl-timer" value="5" checked> 5s</label>
+          <label class="year-item tt" data-tip-key="crawl_10s"><input type="radio" name="rt-crawl-timer" value="10"> 10s</label>
+          <label class="year-item tt" data-tip-key="crawl_15s"><input type="radio" name="rt-crawl-timer" value="15"> 15s</label>
+          <span id="crawl-countdown" style="font-size:11px;color:#ddd;min-width:24px;text-align:right;font-family:monospace;"></span>
+        </div>
+      </div>
+    </div>
+    <div id="charts-col">
+      <div class="chart-box">
+        <div class="chart-title">QSOs (±3h)</div>
+        <div class="chart-row">
+          <div class="chart-wrap" id="wrap-qsos">
+            <canvas class="chart-bg" id="bg-qsos"></canvas>
+            <canvas class="chart-ov" id="ov-qsos"></canvas>
+          </div>
+          <div class="band-labels" id="lbl-qsos"></div>
+        </div>
+      </div>
+      <div class="chart-box" id="box-rbn-spots" style="display:none">
+        <div class="chart-title">RBN Spots (±3h)</div>
+        <div class="chart-row">
+          <div class="chart-wrap" id="wrap-rbn-spots">
+            <canvas class="chart-bg" id="bg-rbn-spots"></canvas>
+            <canvas class="chart-ov" id="ov-rbn-spots"></canvas>
+          </div>
+          <div class="band-labels" id="lbl-rbn-spots"></div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Grids (±3h)</div>
+        <div class="chart-row">
+          <div class="chart-wrap" id="wrap-grids">
+            <canvas class="chart-bg" id="bg-grids"></canvas>
+            <canvas class="chart-ov" id="ov-grids"></canvas>
+          </div>
+          <div class="band-labels" id="lbl-grids"></div>
+        </div>
+      </div>
+      <div class="chart-box" id="box-rbn-grids" style="display:none">
+        <div class="chart-title">RBN Grids (±3h)</div>
+        <div class="chart-row">
+          <div class="chart-wrap" id="wrap-rbn-grids">
+            <canvas class="chart-bg" id="bg-rbn-grids"></canvas>
+            <canvas class="chart-ov" id="ov-rbn-grids"></canvas>
+          </div>
+          <div class="band-labels" id="lbl-rbn-grids"></div>
+        </div>
+      </div>
+      <div id="band-legend"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+async function loadJSON(paths){
+  for(const p of paths){
+    try{ const r=await fetch(p); if(r.ok)return await r.json(); }catch(e){}
+  }
+  return null;
+}
+
+// ズーム倍率: 1.15 (変更候補: 1.3=旧値, 2.0=旧クリック倍率)
+const ZOOM_FACTOR=1.15;
+// 太陽位置計算（UTC分から太陽の赤緯・経度を計算）
+function solarPosition(utcMinutes){
+  // IARU=7月中旬(day≒196), CQ WW CW=11月末(day≒330), CQ WW SSB=10月末(day≒304)
+  // contestCfgから判定
+  const key=document.getElementById('sel-contest').value;
+  const dayOfYear=key==='cqww_cw'?330:key==='cqww_ssb'?304:
+                  key==='cqwpx_cw'?140:key==='cqwpx_ssb'?70:196; // iaru=196
+  const declDeg=23.45*Math.sin((360/365*(dayOfYear-81))*Math.PI/180);
+  const sunLon=-(utcMinutes/60-12)*15; // 正午に経度0
+  return{lat:declDeg, lon:((sunLon+180)%360+360)%360-180};
+}
+
+// 大圏距離(km)計算
+function gcDist(lat1,lon1,lat2,lon2){
+  const R=6371,p=Math.PI/180;
+  const a=Math.sin((lat2-lat1)*p/2)**2+
+    Math.cos(lat1*p)*Math.cos(lat2*p)*Math.sin((lon2-lon1)*p/2)**2;
+  return 2*R*Math.asin(Math.sqrt(Math.min(1,a)));
+}
+function getBright(){ return (+document.getElementById('sld-bright').value)/100; }
+const SCALE_DEFAULT=6000,SCALE_MIN=300,SCALE_MAX=20000;
+// Radiusスライダーのキリ番ステップテーブル（index 0〜）
+const RADIUS_STEPS=[300,500,700,1000,1500,2000,2500,3000,4000,5000,
+                    6000,7000,8000,9000,10000,12000,14000,15000,16000,17000,
+                    18000,19000,20000];
+function radiusToSliderIdx(km){
+  let best=0,bd=Infinity;
+  RADIUS_STEPS.forEach((v,i)=>{const d=Math.abs(v-km);if(d<bd){bd=d;best=i;}});
+  return best;
+}
+function sliderIdxToRadius(i){return RADIUS_STEPS[Math.min(i,RADIUS_STEPS.length-1)];}
+function syncRadiusSlider(){
+  const idx=radiusToSliderIdx(radiusKm);
+  const sl=document.getElementById('sld-radius');
+  if(sl){sl.max=RADIUS_STEPS.length-1;sl.value=idx;}
+  const lb=document.getElementById('lbl-radius');
+  if(lb)lb.textContent=radiusKm.toLocaleString()+'km';
+}
+let CX=-0.8,CY=52.5,QX=-0.8,QY=52.5;
+const CX0=-0.8,CY0=52.5;
+let radiusKm=SCALE_DEFAULT;
+let allData=null,worldFeatures=null,animTimer=null,rtTimer=null,chartRafId=null,_rtRafId=null;
+let _offscreen=null,_offscreenKey=null; // 地形図+ベアリング+リングのキャッシュ
+// 点滅: 明→暗0.5秒、暗→明0.2秒の非対称サイクル
+let _blinkAlpha=1.0,_blinkRaf=null,_blinkLastTs=null,_blinkGen=0;
+const BLINK_FADE=500,BLINK_RISE=200; // ms
+function _blinkLoop(ts,gen){
+  if(gen!==_blinkGen)return;
+  if(_blinkLastTs===null)_blinkLastTs=ts;
+  const dt=Math.min(ts-_blinkLastTs,100);_blinkLastTs=ts;
+  if(!_blinkLoop._dir)_blinkLoop._dir=-1;
+  _blinkAlpha+=_blinkLoop._dir*dt/(_blinkLoop._dir>0?BLINK_RISE:BLINK_FADE);
+  if(_blinkAlpha<=0.15){_blinkAlpha=0.15;_blinkLoop._dir=1;}
+  if(_blinkAlpha>=1.0){_blinkAlpha=1.0;_blinkLoop._dir=-1;}
+  _redrawCellsOnly();
+  const ovOff=document.getElementById('ov-offscreen');
+  if(ovOff&&ovOff._blink)ovOff.querySelectorAll('.blink').forEach(el=>el.style.opacity=_blinkAlpha);
+  const ovRbn=document.getElementById('ov-rbn-stat');
+  if(ovRbn&&ovRbn._blink)ovRbn.querySelectorAll('.blink').forEach(el=>el.style.opacity=_blinkAlpha);
+  _blinkRaf=requestAnimationFrame(ts2=>_blinkLoop(ts2,gen));
+}
+let _blinkCellCache=null;
+let _arrowBlink={raf:null,gen:0,alphas:[]};
+let _arrowCache=null;
+function _redrawCellsOnly(){
+  if(!_blinkCellCache||!_offscreen||SZ===0)return;
+  const{cx2,cy2,R,entries,grids}=_blinkCellCache;
+  c2.clearRect(0,0,SZ,SZ);
+  c2.save();
+  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);c2.clip();
+  c2.fillStyle='#000';c2.fillRect(0,0,SZ,SZ);
+  c2.drawImage(_offscreen,0,0);
+  c2.globalAlpha=_blinkAlpha;
+  for(const[rx4,,col]of entries){
+    const meta=grids[rx4];if(!meta)continue;
+    c2.fillStyle=col;
+    if(drawCell(meta.lat,meta.lon))c2.fill();
+  }
+  // RBNのみセル（QSOなし）
+  if(_blinkCellCache.rbnEnabled&&_blinkCellCache.rbnCount){
+    const{rbnCount,rbnMaxC,rbnGrids,rxCount:qsoCount}=_blinkCellCache;
+    for(const[rx4,cnt]of Object.entries(rbnCount)){
+      if(rx4 in qsoCount)continue;
+      const meta=rbnGrids[rx4]||grids[rx4];if(!meta)continue;
+      const col=rbnColor(cnt/rbnMaxC);if(!col)continue;
+      c2.fillStyle=col;
+      if(drawCell(meta.lat,meta.lon))c2.fill();
+    }
+  }
+  c2.globalAlpha=1.0;
+  c2.restore();
+  // 外周円
+  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);
+  c2.strokeStyle='rgba(255,255,255,0.20)';c2.lineWidth=1.5;c2.stroke();
+  // 中心マーカー
+  const cp=proj([CX,CY]);
+  if(cp){
+    c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
+    c2.fillStyle='#ee4444';c2.fill();
+    c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
+    c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';c2.textBaseline='middle';
+    c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
+  }
+  if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
+    const qp=proj([QX,QY]);
+    if(qp){c2.beginPath();c2.arc(qp[0],qp[1],4,0,Math.PI*2);
+      c2.fillStyle='#4af';c2.fill();c2.strokeStyle='#fff';c2.lineWidth=1;c2.stroke();}
+  }
+  // N/E/S/W
+  c2.textAlign='center';c2.textBaseline='middle';
+  c2.fillStyle='rgba(255,255,255,0.30)';c2.font='10px sans-serif';
+  [['N',cx2,10],['E',SZ-8,cy2],['S',cx2,SZ-8],['W',8,cy2]]
+    .forEach(([l,x,y])=>c2.fillText(l,x,y));
+  // 三角インジケーター（パネルより手前）
+  if(_arrowCache&&_arrowCache.length>0){
+    const alphas=_arrowBlink.alphas;
+    _drawArrowsOnCanvas(_arrowCache,alphas&&alphas.length===_arrowCache.length?alphas:null);
+  }
+}
+// t_stepインデックス: _stepIndex[t_step] = [{band, mode, lon_bucket, rx4, count}, ...]
+let _stepIndex=null;
+let _floatStep=0; // 再生中の小数ステップ（チャート破線補間用）
+const cv=document.getElementById('cv');
+const c2=cv.getContext('2d');
+let proj=null,SZ=0;
+
+// バンド色テーブル
+const BAND_COLORS={1:'#534AB7',2:'#1D9E75',3:'#C8A830',4:'#378ADD',5:'#BA7517',6:'#E24B4A'};
+function bandColorAlpha(b,a){
+  const c=BAND_COLORS[b];
+  return`rgba(${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},${a})`;
+}
+const BAND_NAMES={1:'160m',2:'80m',3:'40m',4:'20m',5:'15m',6:'10m'};
+
+// i18n
+const isJa=/^ja\b/.test(navigator.language);
+const TIPS={
+  legend_color: ['ヒートマップの色凡例','Heatmap color legend'],
+  map_bright:   ['地形図・ベアリングラインの表示輝度','Terrain map / bearing line brightness'],
+  ov_center:    ['中心グリッド / 表示半径 / 表示中のグリッド数とQSO数 / クリックで表示範囲をデフォルトに戻す',
+                 'Center grid / display radius / visible grids & QSOs / click to reset view'],
+  map_radius:   ['大圏地図の表示半径 (300〜20000km)','Great circle map display radius (300–20000 km)'],
+  set_default:  ['現在の設定をデフォルトとして保存（リロード時に復元）','Save current settings as default (restored on reload)'],
+  btn_reset:    ['設定をデフォルト値にリセット','Reset settings to defaults'],
+  btn_doc:      ['操作ガイドを別タブで開く','Open user guide in new tab'],
+  chk_rbn:      ['RBNスポットデータを重ね表示（CWのみ）','Overlay RBN spot data (CW only)'],
+  dist_label:   ['表示する最大距離（Distフィルタ）','Maximum display distance (Dist filter)'],
+  dist_slider:  ['送信局の距離上限 100〜3000km','TX station distance limit 100–3000 km'],
+  center_label: ['大圏地図の中心グリッド','Great circle map center grid'],
+  inp_grid:     ['4桁グリッドロケータ（例: JO02）','4-digit grid locator (e.g. JO02)'],
+  btn_apply:    ['指定グリッドを中心に設定','Set specified grid as center'],
+  chk_fixed:    ['チェック時: 地図中心とクエリ中心を連動させない','When checked: decouple map center from query center'],
+  sel_band:     ['表示するバンド（All=全バンド）','Display band (All = all bands)'],
+  sel_mode:     ['表示するモード（All=全モード）','Display mode (All = all modes)'],
+  sel_power:    ['自局パワー: QRP=5W以下 / Low=QRP+Low / High=フィルタなし','TX power: QRP=≤5 W / Low=QRP+Low / High=no filter'],
+  sel_contest:  ['対象コンテストを選択','Select contest'],
+  year_label:   ['複数年選択可。時間軸を合わせてマージ表示','Multiple years selectable; merged with aligned time axis'],
+  btn_rt:       ['現在のUTC時刻に合わせてリアルタイム表示','Real-time display synced to current UTC'],
+  btn_play:     ['コンテスト開始から自動再生','Auto-play from contest start'],
+  crawl_label:  ['RTモード中のバンド自動巡回','Automatic band cycling during RT mode'],
+  crawl_auto:   ['現時間帯のQSO数が多いバンド順に巡回（15%未満スキップ）','Cycle by descending QSO count in current period (skip <15%)'],
+  crawl_all:    ['160m→80m→…→10m順にバンドとモードを巡回','Cycle through bands and modes: 160m→80m→…→10m'],
+  crawl_none:   ['バンド/モード巡回なし','No band/mode cycling'],
+  crawl_5s:     ['巡回間隔 5秒','Crawl interval: 5 s'],
+  crawl_10s:    ['巡回間隔 10秒','Crawl interval: 10 s'],
+  crawl_15s:    ['巡回間隔 15秒','Crawl interval: 15 s'],
+  play_stop:    ['再生を停止','Stop playback'],
+  rt_stop:      ['リアルタイム更新を停止','Stop real-time update'],
+};
+function t(key){return isJa?TIPS[key][0]:TIPS[key][1];}
+
+// コンテスト設定テーブル
+const CONTEST_CFG={
+  iaru:      {startHour:12, hours:24, label:'IARU HF',    years:[2018,2019,2020,2021,2022,2023,2024,2025]},
+  cqww_cw:   {startHour:0,  hours:48, label:'CQ WW CW',   years:Array.from({length:21},(_,i)=>2005+i)},
+  cqww_ssb:  {startHour:0,  hours:48, label:'CQ WW SSB',  years:Array.from({length:21},(_,i)=>2005+i)},
+  cqwpx_cw:  {startHour:0,  hours:48, label:'CQ WPX CW',  years:Array.from({length:18},(_,i)=>2008+i)},
+  cqwpx_ssb: {startHour:0,  hours:48, label:'CQ WPX SSB', years:Array.from({length:18},(_,i)=>2008+i)},
+};
+
+function contestCfg(){
+  return CONTEST_CFG[document.getElementById('sel-contest').value]||CONTEST_CFG.iaru;
+}
+
+function getUTCStep(){ return +document.getElementById('sld-hour').value; }
+
+function getQueryStep(){
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??60;
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+  const startStep=Math.round(cfg.startHour*60/resMin);
+  const raw=startStep + getUTCStep();
+  // 48hコンテスト: t_stepは0〜(stepsPerDay*2-1)で一意、折り返しなし
+  // 24hコンテスト: 従来通り % stepsPerDay
+  return cfg.hours===48 ? raw : raw % stepsPerDay;
+}
+
+function fmtTime(val){
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??60;
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+  const startStep=Math.round(cfg.startHour*60/resMin);
+  // 48時間コンテストは通算分数で計算（折り返しなし）
+  const totalMin=(cfg.hours===48)
+    ? (startStep+val)*resMin
+    : ((startStep+val)%stepsPerDay)*resMin;
+  return String(Math.floor(totalMin/60)).padStart(2,'0')+':'+String(totalMin%60).padStart(2,'0');
+}
+
+// inp-hourの表示を更新（フォーカス中は更新しない）
+function updateInpHour(val){
+  const inp=document.getElementById('inp-hour');
+  if(document.activeElement===inp) return;
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??60;
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+  const startStep=Math.round(cfg.startHour*60/resMin);
+  const totalMin=(cfg.hours===48)
+    ? (startStep+val)*resMin
+    : ((startStep+val)%stepsPerDay)*resMin;
+  const hh=Math.floor(totalMin/60)%24;
+  const mm=totalMin%60;
+  // +1dチェックボックスも連動
+  if(cfg.hours===48){
+    const plus1=(startStep+val)*resMin>=1440;
+    const chk=document.getElementById('chk-plus1d');
+    if(chk) chk.checked=plus1;
+  }
+  inp.value=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+}
+
+// ---- Apply ハイライト ---------------------------------------------------
+let applyDirty=false;
+function setApplyDirty(v){
+  applyDirty=v;
+  document.getElementById('btn-apply').classList.toggle('dirty',v);
+}
+
+// ---- 投影 --------------------------------------------------------------
+function buildProj(){
+  // 高さ基準でcanvasサイズを決める
+  // まずmap-wrapの固定サイズをリセットし、フレックスレイアウトから正しいサイズを取得
+  const mapWrap=cv.parentElement;
+  mapWrap.style.width='';
+  mapWrap.style.height='';
+  // layout再計算のため offsetHeight を参照
+  // [レイアウト切り替え] 閾値830px以下で縦積み、超で横並び
+  // 元に戻す場合: このブロック全体を削除し、元のSZ=行を復元する
+  const _mainRow=cv.parentElement.parentElement;
+  const _rc=document.getElementById('right-col');
+  const _THRESHOLD=830;
+  const _vertical=(window.innerWidth<=_THRESHOLD);
+  if(_vertical){
+    // 縦積み: 地図はウィンドウ幅フル（padding分を引く）、グラフは地図高さの1.5倍まで
+    _mainRow.style.flexDirection='column';
+    SZ=Math.min(window.innerWidth-10, window.innerHeight);
+    if(SZ<100)SZ=window.innerWidth-10;
+    if(_rc){
+      _rc.style.maxHeight=Math.floor(SZ*2.2)+'px';
+      _rc.style.overflowY='hidden';
+      _rc.style.width='';
+    }
+  } else {
+    // 横並び: 地図幅はウィンドウ幅の75%まで、グラフは地図と同じ高さ
+    _mainRow.style.flexDirection='row';
+    const _maxSZ=Math.floor(window.innerWidth*0.75);
+    SZ=Math.min(mapWrap.offsetHeight||mapWrap.offsetWidth, _maxSZ);
+    if(SZ<100)SZ=mapWrap.offsetWidth;
+    if(_rc){
+      _rc.style.maxHeight=SZ+'px';
+      _rc.style.overflowY='hidden';
+      _rc.style.width='';
+    }
+  }
+  // SZ=mapWrap.offsetHeight||mapWrap.offsetWidth;  // 元のコード
+  cv.width=SZ; cv.height=SZ;
+  mapWrap.style.width=SZ+'px';
+  mapWrap.style.height=SZ+'px';
+  mapWrap.style.position='relative';
+  // map-brightをmap-wrapの左下に配置
+  const mb=document.getElementById('map-bright');
+  if(mb){
+    mb.style.position='absolute';
+    mb.style.bottom='8px';
+    mb.style.left='8px';
+    mb.style.top='';
+  }
+  // overlay-infoとradius-ctrlの初期配置（drawMap後に正確な位置が確定）
+  const oi=document.getElementById('overlay-info');
+  if(oi){
+    oi.style.position='absolute';
+    oi.style.right='8px';
+    oi.style.top='';
+    oi.style.left='';
+    // bottom は drawMap() 内で radius-ctrl の高さを基準に設定
+  }
+  const rc2=document.getElementById('radius-ctrl');
+  if(rc2){
+    rc2.style.position='absolute';
+    rc2.style.right='8px';
+    rc2.style.bottom='8px';
+    rc2.style.top='';
+  }
+  proj=d3.geoAzimuthalEquidistant()
+    .rotate([-CX,-CY])
+    .scale((SZ/2-8)/(radiusKm/6371))
+    .translate([SZ/2,SZ/2]);
+}
+
+function pixelToGeo(px,py){
+  const sc=(SZ/2-8)/(radiusKm/6371);
+  const x=(px-SZ/2)/sc,y=(py-SZ/2)/sc;
+  const rho=Math.sqrt(x*x+y*y);
+  if(rho<1e-10)return[CX,CY];
+  if(rho>Math.PI)return null;
+  const cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+  const lat=Math.asin(Math.cos(rho)*Math.sin(cy)+(-y*Math.sin(rho)*Math.cos(cy)/rho));
+  const lon=cx+Math.atan2(x*Math.sin(rho),rho*Math.cos(cy)*Math.cos(rho)+y*Math.sin(cy)*Math.sin(rho));
+  return[lon*180/Math.PI,lat*180/Math.PI];
+}
+
+function geoToGrid4(lon,lat){
+  const FL='ABCDEFGHIJKLMNOPQR';
+  const fi=Math.max(0,Math.min(17,Math.floor((lon+180)/20)));
+  const ri=Math.max(0,Math.min(17,Math.floor((lat+90)/10)));
+  const si=Math.max(0,Math.min(9,Math.floor(((lon+180)%20)/2)));
+  const sj=Math.max(0,Math.min(9,Math.floor((lat+90)%10)));
+  return FL[fi]+FL[ri]+si+sj;
+}
+
+// ---- ドラッグ -----------------------------------------------------------
+let dragStart=null,dragStartCX=null,dragStartCY=null,isDragging=false;
+const DRAG_THR=5;
+
+cv.addEventListener('mousedown',e=>{
+  if(e.button!==0)return;
+  const rect=cv.getBoundingClientRect();
+  dragStart={x:(e.clientX-rect.left)*(SZ/rect.width),
+             y:(e.clientY-rect.top)*(SZ/rect.height)};
+  dragStartCX=CX; dragStartCY=CY; isDragging=false;
+  e.preventDefault();
+});
+
+cv.addEventListener('mousemove',e=>{
+  if(!dragStart)return;
+  const rect=cv.getBoundingClientRect();
+  const px=(e.clientX-rect.left)*(SZ/rect.width);
+  const py=(e.clientY-rect.top)*(SZ/rect.height);
+  const dx=px-dragStart.x,dy=py-dragStart.y;
+  if(!isDragging&&Math.sqrt(dx*dx+dy*dy)<DRAG_THR)return;
+  isDragging=true; cv.style.cursor='grabbing';
+  const sc=(SZ/2-8)/(radiusKm/6371);
+  const latRad=dragStartCY*Math.PI/180;
+  CX=((dragStartCX+(-dx/sc)*(180/Math.PI)/Math.cos(latRad)+180)%360+360)%360-180;
+  CY=Math.max(-85,Math.min(85,dragStartCY-(-dy/sc)*(180/Math.PI)));
+  if(!document.getElementById('chk-fixed').checked){QX=CX;QY=CY;}
+  const newGrid=geoToGrid4(CX,CY);
+  document.getElementById('inp-grid').value=newGrid;
+  // ドラッグで地図が動いたらApplyをハイライト
+  setApplyDirty(true);
+  drawMap();
+});
+
+function endDrag(e){
+  if(!dragStart)return;
+  dragStart=null; isDragging=false; cv.style.cursor='crosshair';
+}
+cv.addEventListener('mouseup',endDrag);
+cv.addEventListener('mouseleave',()=>{
+  if(dragStart&&isDragging){dragStart=null;isDragging=false;cv.style.cursor='crosshair';}
+});
+
+let _wheelPending=false, _skipCharts=false, _chartDebounce=null;
+cv.addEventListener('wheel',e=>{
+  if(!e.ctrlKey&&!e.metaKey)return;
+  e.preventDefault();
+  // ZOOM_FACTOR=1.15 (変更候補: 1.3)
+  radiusKm=e.deltaY>0?Math.min(SCALE_MAX,radiusKm*ZOOM_FACTOR):Math.max(SCALE_MIN,radiusKm/ZOOM_FACTOR);
+  _skipCharts=true; // ズーム中はチャート更新をスキップ
+  if(!_wheelPending){
+    _wheelPending=true;
+    requestAnimationFrame(()=>{_wheelPending=false;drawMap();});
+  }
+  // ホイール停止後200msでチャートを1回更新
+  clearTimeout(_chartDebounce);
+  _chartDebounce=setTimeout(()=>{_skipCharts=false;updateCharts();},200);
+},{passive:false});
+
+// ---- グラフホバーツールチップ -------------------------------------------
+function _setupChartHover(wrapId, bgId, key, keyLabel){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap)return;
+  const tip=document.getElementById('ui-tooltip');
+
+  wrap.addEventListener('mousemove',e=>{
+    const cache=_chartBg[bgId];
+    if(!cache){tip.style.display='none';return;}
+    const {PAD,totalSteps,pxPerStep,W,data,sumByStep,resMin,startUTCmin,halfSteps}=cache;
+    const nowIdx=cache.startContestIdx; // 現在の中心インデックス
+    const nowX=PAD.l+(W-PAD.l-PAD.r)/2;
+    const rect=wrap.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(W/rect.width);
+    // X座標からコンテストインデックスを計算
+    const ci=Math.round(nowIdx+(mx-nowX)/pxPerStep);
+    if(ci<0||ci>=totalSteps){tip.style.display='none';return;}
+    const refCi=ci;
+    // UTC時刻文字列
+    const utcMin=((startUTCmin+refCi*resMin)%(24*60)+24*60)%(24*60);
+    const hh=String(Math.floor(utcMin/60)).padStart(2,'0');
+    const mm=String(utcMin%60).padStart(2,'0');
+    const timeStr=`${hh}:${mm}z`;
+    // バンド別値を取得してQSO数降順でソート
+    const items=[];
+    for(let b=1;b<=6;b++){
+      const v=data[b][refCi]?.[key]??0;
+      if(v>0)items.push({b,v});
+    }
+    items.sort((a,b2)=>b2.v-a.v);
+    const keyLabel2=keyLabel??(key==='qso'?'QSO':'Grids');
+    let html=`<span style="color:#99a">${timeStr}</span>`;
+    if(items.length===0){
+      html+=`<br><span style="color:#666">No ${keyLabel2}</span>`;
+    } else {
+      for(const{b,v}of items){
+        html+=`<br><span style="color:${BAND_COLORS[b]}">${BAND_NAMES[b]}</span> ${v} ${keyLabel2}`;
+      }
+    }
+    tip.innerHTML=html;
+    tip.style.display='block';
+    const x=Math.min(e.clientX+12,window.innerWidth-tip.offsetWidth-8);
+    const y=Math.min(e.clientY+18,window.innerHeight-tip.offsetHeight-8);
+    tip.style.left=x+'px';tip.style.top=y+'px';
+  });
+  wrap.addEventListener('mouseleave',()=>{tip.style.display='none';});
+}
+function getFilters(){
+  const distKm=+document.getElementById('sld-lon').value;
+  // power: 0=High(フィルタなし), 1=QRP(1のみ), 2=Low(1,2のみ)
+  const powerMax=+document.getElementById('sel-power').value;
+  return{band:+document.getElementById('sel-band').value,
+         mode:+document.getElementById('sel-mode').value,
+         powerMax,
+         tStep:getQueryStep(),
+         lonRange:distKm/111,
+         distKm:distKm};
+}
+
+function queryHeatmap(f){
+  if(!allData)return{};
+  const cnt={};
+  const recs=_stepIndex?_stepIndex[f.tStep]:allData.records;
+  if(!recs)return cnt;
+  for(const rec of recs){
+    if(f.band&&rec[1]!==f.band)continue;
+    if(f.mode&&rec[2]!==f.mode)continue;
+    if(!_stepIndex&&rec[3]!==f.tStep)continue;
+    // rec[6]: power_code (0=UNKNOWN,1=QRP,2=LOW,3=HIGH) ※新フォーマットのみ
+    // powerMax>0 の場合: rec[6]<=powerMax のもののみ（UNKNOWNは通す）
+    if(f.powerMax>0&&rec[6]!=null&&rec[6]>0&&rec[6]>f.powerMax)continue;
+    if(typeof rec[4]==='string'){
+      const txMeta=allData.grids[rec[4]];
+      if(!txMeta)continue;
+      if(gcDist(QY,QX,txMeta.lat,txMeta.lon)>f.distKm)continue;
+    } else {
+      const lonMin=QX-f.lonRange,lonMax=QX+f.lonRange;
+      if(rec[4]<lonMin||rec[4]>lonMax)continue;
+    }
+    cnt[rec[0]]=(cnt[rec[0]]||0)+rec[5];
+  }
+  return cnt;
+}
+
+// RBNデータのクエリ（フィルタ適用）: {grid4: count}
+// 条件1: spotted局がDist内 → spotterのグリッドにパネル表示
+// 条件2: spotter局がDist内 → spotted局のグリッドにパネル表示
+// 両方Dist内の場合は両方のグリッドにそれぞれ加算
+function queryRbn(f){
+  if(!allRbnData||!_rbnStepIndex)return{};
+  if(!document.getElementById('chk-rbn')?.checked)return{};
+  const cnt={};
+  const recs=_rbnStepIndex[f.tStep]||[];
+  for(const rec of recs){
+    if(f.band&&rec[1]!==f.band)continue;
+    // RBNはCWのみ。モードフィルタがCW(1)またはAll(0)以外ならスキップ
+    if(f.mode&&f.mode!==1)continue;
+    if(f.powerMax>0&&rec[6]!=null&&rec[6]>0&&rec[6]>f.powerMax)continue;
+
+    // rec[0]=spotted(rx4), rec[4]=spotter(tx4)
+    const spottedGrid=allRbnData.grids[rec[0]]||allData?.grids[rec[0]];
+    const spotterGrid=allRbnData.grids[rec[4]]||allData?.grids[rec[4]];
+
+    // 条件1: spotted Dist内 → spotterのパネル
+    if(spottedGrid&&gcDist(QY,QX,spottedGrid.lat,spottedGrid.lon)<=f.distKm){
+      if(spotterGrid) cnt[rec[4]]=(cnt[rec[4]]||0)+rec[5];
+    }
+    // 条件2: spotter Dist内 → spotted局のパネル
+    if(spotterGrid&&gcDist(QY,QX,spotterGrid.lat,spotterGrid.lon)<=f.distKm){
+      if(spottedGrid) cnt[rec[0]]=(cnt[rec[0]]||0)+rec[5];
+    }
+  }
+  return cnt;
+}
+
+// ---- カラー ------------------------------------------------------------
+function heatColor(n){
+  if(n<0.001)return null;
+  n=Math.pow(n,0.35);
+  const stops=[[0,[0,80,220]],[0.25,[0,200,220]],[0.45,[0,210,100]],
+    [0.65,[220,210,0]],[0.82,[230,100,0]],[1.00,[210,0,0]]];
+  let lo=stops[0],hi=stops[stops.length-1];
+  for(let i=0;i<stops.length-1;i++){
+    if(n>=stops[i][0]&&n<=stops[i+1][0]){lo=stops[i];hi=stops[i+1];break;}
+  }
+  const t=lo[0]===hi[0]?0:(n-lo[0])/(hi[0]-lo[0]);
+  return`rgb(${(lo[1][0]+(hi[1][0]-lo[1][0])*t)|0},${(lo[1][1]+(hi[1][1]-lo[1][1])*t)|0},${(lo[1][2]+(hi[1][2]-lo[1][2])*t)|0})`;
+}
+
+// RBN専用カラー: 暗紫(45,0,80) → マゼンタ(204,0,204) → 白(255,255,255)
+function rbnColor(n){
+  if(n<0.001)return null;
+  n=Math.pow(n,0.35);
+  const stops=[[0,[45,0,80]],[0.5,[204,0,204]],[1.0,[255,255,255]]];
+  let lo=stops[0],hi=stops[stops.length-1];
+  for(let i=0;i<stops.length-1;i++){
+    if(n>=stops[i][0]&&n<=stops[i+1][0]){lo=stops[i];hi=stops[i+1];break;}
+  }
+  const t=lo[0]===hi[0]?0:(n-lo[0])/(hi[0]-lo[0]);
+  return`rgb(${(lo[1][0]+(hi[1][0]-lo[1][0])*t)|0},${(lo[1][1]+(hi[1][1]-lo[1][1])*t)|0},${(lo[1][2]+(hi[1][2]-lo[1][2])*t)|0})`;
+}
+
+// 凡例バーをカラー関数と連動して描画
+function drawLegendBar(canvasId, colorFn){
+  const c=document.getElementById(canvasId);
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  for(let x=0;x<W;x++){
+    const col=colorFn((x+0.5)/W);
+    if(col){ctx.fillStyle=col;ctx.fillRect(x,0,1,H);}
+  }
+}
+
+// RBNデータ
+let allRbnData=null;
+let _rbnStepIndex=null;
+
+// ---- セル描画 ----------------------------------------------------------
+function drawCell(lat,lon){
+  const pc=proj([lon,lat]),pe=proj([lon+2,lat]),pw=proj([lon-2,lat]);
+  const pn=proj([lon,lat+1]),ps=proj([lon,lat-1]);
+  if(!pc||!pe||!pw||!pn||!ps)return false;
+  const eX=(pe[0]-pc[0])/2,eY=(pe[1]-pc[1])/2;
+  const wX=(pw[0]-pc[0])/2,wY=(pw[1]-pc[1])/2;
+  const nX=(pn[0]-pc[0])/2,nY=(pn[1]-pc[1])/2;
+  const sX=(ps[0]-pc[0])/2,sY=(ps[1]-pc[1])/2;
+  const sz=Math.sqrt(eX*eX+eY*eY)+Math.sqrt(nX*nX+nY*nY);
+  if(sz<0.8||sz>SZ*0.3)return false;
+  const x=pc[0],y=pc[1];
+  c2.beginPath();
+  c2.moveTo(x+wX+sX,y+wY+sY);c2.lineTo(x+eX+sX,y+eY+sY);
+  c2.lineTo(x+eX+nX,y+eY+nY);c2.lineTo(x+wX+nX,y+wY+nY);
+  c2.closePath();return true;
+}
+
+// ---- ベアリングライン --------------------------------------------------
+function drawBearingLines(pg){
+  c2.save();
+  const br=getBright(); c2.strokeStyle=`rgba(255,255,255,${(0.18*br).toFixed(3)})`;c2.lineWidth=0.6;
+  for(let brg=0;brg<360;brg+=30){
+    const bRad=brg*Math.PI/180,pts=[];
+    for(let km=100;km<=20000;km+=200){
+      const d=km/6371,cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+      const lat2=Math.asin(Math.sin(cy)*Math.cos(d)+Math.cos(cy)*Math.sin(d)*Math.cos(bRad));
+      const lon2=cx+Math.atan2(Math.sin(bRad)*Math.sin(d)*Math.cos(cy),
+                                Math.cos(d)-Math.sin(cy)*Math.sin(lat2));
+      pts.push([lon2*180/Math.PI,lat2*180/Math.PI]);
+    }
+    c2.beginPath();pg({type:'Feature',geometry:{type:'LineString',coordinates:pts}});c2.stroke();
+  }
+  const lbls=['N','30','60','E','120','150','S','210','240','W','300','330'];
+  c2.fillStyle=`rgba(255,255,255,${(0.35*br).toFixed(3)})`;c2.font='9px sans-serif';
+  c2.textAlign='center';c2.textBaseline='middle';
+  lbls.forEach((lbl,i)=>{
+    const brg=i*30*Math.PI/180;
+    const d=Math.min(radiusKm*0.92,19500)/6371;
+    const cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+    const lat2=Math.asin(Math.sin(cy)*Math.cos(d)+Math.cos(cy)*Math.sin(d)*Math.cos(brg));
+    const lon2=cx+Math.atan2(Math.sin(brg)*Math.sin(d)*Math.cos(cy),
+                              Math.cos(d)-Math.sin(cy)*Math.sin(lat2));
+    const pt=proj([lon2*180/Math.PI,lat2*180/Math.PI]);
+    if(pt&&pt[0]>8&&pt[0]<SZ-8&&pt[1]>8&&pt[1]<SZ-8)c2.fillText(lbl,pt[0],pt[1]);
+  });
+  c2.restore();
+}
+
+// ---- バンド別チャート --------------------------------------------------
+// centerStep: 現在表示中のt_step, ±3時間分のステップ数を集計
+function computeChartData(centerStep){
+  // コンテスト全時間分のデータを構築する
+  // totalSteps = コンテスト総ステップ数（24h=24, 48h=48）
+  // 再生時はスクロールで表示ウィンドウ(±3h)を移動
+  if(!allData)return null;
+  const cfg=contestCfg();
+  const resMin=allData.meta?.time_resolution_min??60;
+  const stepsPerDay=allData.meta?.steps_per_day??24;
+  const stepsPerHour=60/resMin;
+  const halfSteps=Math.round(3*stepsPerHour); // 表示ウィンドウの半分（±3h）
+
+  // コンテスト開始t_stepとコンテスト全ステップ数
+  const contestStartStep=Math.round(cfg.startHour*60/resMin);
+  const contestTotalSteps=cfg.hours*stepsPerHour; // 全ステップ（24or48）
+  const totalSteps=Math.round(contestTotalSteps);
+
+  const distKm=+document.getElementById('sld-lon').value;
+  const lonDeg=distKm/111;
+  const modeFilter=+document.getElementById('sel-mode').value;
+  const powerMax=+document.getElementById('sel-power').value;
+
+  const byBand={};
+  for(let b=1;b<=6;b++){
+    byBand[b]=Array.from({length:totalSteps},()=>({qso:0,grids:{},gc:0}));
+  }
+
+  for(let ci=0;ci<totalSteps;ci++){
+    // 48hコンテスト: t_stepは0〜287で一意なのでcontest開始からの絶対ステップ
+    // 24hコンテスト: 従来通り % stepsPerDay で折り返す
+    const step=cfg.hours===48
+      ? (contestStartStep+ci)
+      : ((contestStartStep+ci)%stepsPerDay+stepsPerDay)%stepsPerDay;
+    const recs=_stepIndex?_stepIndex[step]:[];
+    if(!recs||!recs.length)continue;
+    for(const rec of recs){
+      const b=rec[1];
+      if(b<1||b>6)continue;
+      if(modeFilter&&rec[2]!==modeFilter)continue;
+      if(powerMax>0&&rec[6]!=null&&rec[6]>0&&rec[6]>powerMax)continue;
+      if(typeof rec[4]==='string'){
+        const txMeta=allData.grids[rec[4]];
+        if(!txMeta)continue;
+        if(gcDist(QY,QX,txMeta.lat,txMeta.lon)>distKm)continue;
+      } else {
+        const lonMin=QX-lonDeg,lonMax=QX+lonDeg;
+        if(rec[4]<lonMin||rec[4]>lonMax)continue;
+      }
+      byBand[b][ci].qso+=rec[5];
+      if(!byBand[b][ci].grids[rec[0]]){byBand[b][ci].grids[rec[0]]=1;byBand[b][ci].gc++;}
+    }
+  }
+
+  const result={};
+  for(let b=1;b<=6;b++){
+    result[b]=byBand[b].map(s=>({qso:s.qso,grids:s.gc}));
+  }
+
+  // contestStartStepのUTC時刻（分）
+  const startUTCmin=cfg.startHour*60;
+  // centerStepがコンテスト内の何ステップ目か
+  // 48h: t_stepが0〜287で一意なので単純差分。24h: 従来通り折り返し
+  const centerContestIdx=cfg.hours===48
+    ? Math.max(0, centerStep-contestStartStep)
+    : ((centerStep-contestStartStep)+stepsPerDay)%stepsPerDay;
+
+  return{data:result, halfSteps, totalSteps, resMin, stepsPerHour,
+         startUTCmin, contestStartStep, centerContestIdx, centerStep};
+}
+
+// ---- チャート背景キャッシュ -------------------------------------------
+const _chartBg={};  // bgId -> キャッシュオブジェクト
+
+function _buildChartBg(bgId, ovId, chartData, key, lineAlpha=1.0){
+  const bg=document.getElementById(bgId);
+  const ov=document.getElementById(ovId);
+  if(!bg||!ov)return;
+
+  const wrap=bg.parentElement;
+  const LABEL_W=0; // バンドラベルはDOM要素で表示
+  const W=Math.max(1,(wrap.offsetWidth||wrap.clientWidth));
+  const H=Math.max(1,wrap.offsetHeight||Math.round(W*1.05));
+  if(bg.width!==W||bg.height!==H){bg.width=W;bg.height=H;}
+  if(ov.width!==W||ov.height!==H){ov.width=W;ov.height=H;}
+  ov.style.left='0px';ov.style.top='0px';
+
+  const {data,halfSteps,totalSteps,resMin,startUTCmin}=chartData;
+  const PAD={l:34,r:4,t:20,b:32};
+  const pw=W-PAD.l-PAD.r, ph=H-PAD.t-PAD.b;
+  // 表示ウィンドウは±3時間(halfSteps*2+1ステップ)
+  const winSteps=halfSteps*2+1;
+  const pxPerStep=pw/(winSteps-1);
+
+  // Y軸スケール: 全データから最大値
+  let maxVal=1;
+  for(let b=1;b<=6;b++)
+    for(let i=0;i<totalSteps;i++) maxVal=Math.max(maxVal,data[b][i][key]);
+  // nTicks=2〜5でyMaxが最小になる組み合わせを選択（同点は目盛り数優先）
+  let yMax=Infinity,tickStep=1,nTicks=4;
+  for(const n of [2,3,4,5]){
+    const raw=maxVal/n;
+    const m=raw>0?Math.pow(10,Math.floor(Math.log10(raw))):1;
+    const ts=Math.ceil(raw/m)*m||1;
+    const ym=ts*n;
+    if(ym<yMax||(ym===yMax&&n>nTicks)){yMax=ym;tickStep=ts;nTicks=n;}
+  }
+
+  // 背景: Y軸グリッドとラベルのみ（静的）
+  const ctx=bg.getContext('2d');
+  ctx.fillStyle='#0a0f18';ctx.fillRect(0,0,W,H);
+  ctx.lineWidth=0.5;ctx.font='9px sans-serif';ctx.textAlign='right';
+  for(let i=0;i<=nTicks;i++){
+    const v=tickStep*i,y=PAD.t+ph*(1-v/yMax);
+    ctx.strokeStyle='rgba(255,255,255,0.06)';
+    ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(PAD.l+pw,y);ctx.stroke();
+    ctx.fillStyle='#99a';
+    ctx.fillText(v>=1000?Math.round(v/1000)+'k':v,PAD.l-3,y+3);
+  }
+
+  const sumByStep=Array.from({length:totalSteps},(_,i)=>
+    [1,2,3,4,5,6].reduce((s,b)=>s+data[b][i][key],0));
+
+  const startContestIdx=chartData.centerContestIdx??0;
+  _chartBg[bgId]={yMax,PAD,halfSteps,totalSteps,winSteps,pxPerStep,
+                  W,H,LABEL_W,data,key,sumByStep,resMin,startUTCmin,startContestIdx,lineAlpha};
+}
+
+function _drawChartOverlay(bgId, ovId, elapsed){
+  // elapsed: 再生開始からの経過ステップ数（小数）、非再生時は0
+  const cache=_chartBg[bgId];
+  const ov=document.getElementById(ovId);
+  if(!cache||!ov)return;
+  const {yMax,PAD,halfSteps,totalSteps,winSteps,pxPerStep,
+         W,H,LABEL_W,data,key,sumByStep,resMin,startUTCmin,lineAlpha=1.0}=cache;
+  const pw=W-PAD.l-PAD.r,ph=H-PAD.t-PAD.b;
+
+  const ctx=ov.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  // elapsedはコンテスト内インデックス（直接使用）
+  const nowIdx=elapsed;
+
+  // 破線はグラフ中央固定
+  const nowX=PAD.l+pw/2;
+
+  // クリップしてスクロール描画
+  ctx.save();
+  ctx.beginPath();ctx.rect(PAD.l,0,pw,H);ctx.clip();
+
+  // i番目のデータポイントのX座標:
+  // i=nowIdxのとき x=nowX（中央）
+  // translateは使わず、X座標を直接計算
+  const xOf=i=>nowX+(i-nowIdx)*pxPerStep;
+
+  // 日照背景（先に描画=背面）
+  {
+    const p=Math.PI/180;
+    for(let ci=0;ci<totalSteps;ci++){
+      const x=xOf(ci);
+      if(x<PAD.l-pxPerStep||x>PAD.l+pw+pxPerStep)continue;
+      const utcMin5=((startUTCmin+ci*resMin)%(24*60)+24*60)%(24*60);
+      const sol=solarPosition(utcMin5);
+      const cosA=Math.sin(QY*p)*Math.sin(sol.lat*p)+
+        Math.cos(QY*p)*Math.cos(sol.lat*p)*Math.cos((QX-sol.lon)*p);
+      if(cosA>0){
+        ctx.fillStyle='rgba(0,0,0,1)';
+        ctx.fillRect(x-pxPerStep/2,PAD.t,Math.max(pxPerStep,1.5),ph);
+      } else {
+        ctx.fillStyle='rgba(5,10,40,0.65)';
+        ctx.fillRect(x-pxPerStep/2,PAD.t,Math.max(pxPerStep,1.5),ph);
+      }
+      if(Math.abs(cosA)<0.03){
+        const alpha=0.40*(1-Math.abs(cosA)/0.03);
+        ctx.fillStyle=`rgba(220,130,40,${(alpha*0.7).toFixed(3)})`;
+        ctx.fillRect(x-pxPerStep/2,PAD.t,Math.max(pxPerStep,1.5),ph);
+      }
+    }
+  }
+
+  // 時刻縦線（clip内）
+  for(let ci=0;ci<totalSteps;ci++){
+    const utcMin=(startUTCmin+ci*resMin)%(24*60);
+    if(utcMin%60!==0)continue;
+    const x=xOf(ci);
+    if(x<PAD.l||x>PAD.l+pw)continue;
+    ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(x,PAD.t);ctx.lineTo(x,PAD.t+ph);ctx.stroke();
+  }
+
+  // 折れ線（日照背景より前面）
+  for(let b=1;b<=6;b++){
+    const vals=data[b].map(s=>s[key]);
+    if(vals.every(v=>v===0))continue;
+    ctx.strokeStyle=lineAlpha<1?bandColorAlpha(b,lineAlpha):BAND_COLORS[b];ctx.lineWidth=1.5;
+    let inLine=false;
+    ctx.beginPath();
+    for(let i=0;i<totalSteps;i++){
+      const x=xOf(i);
+      if(x<PAD.l-10||x>PAD.l+pw+10){inLine=false;continue;} // 画面外スキップ
+      const y=PAD.t+ph*(1-Math.min(vals[i],yMax)/yMax);
+      inLine?ctx.lineTo(x,y):(ctx.moveTo(x,y),inLine=true);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // X軸ラベル（1時間ごとの絶対UTC時刻）- clip解除後に描画
+  ctx.font='9px sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  for(let ci=0;ci<totalSteps;ci++){
+    const utcMin=(startUTCmin+ci*resMin)%(24*60);
+    if(utcMin%60!==0)continue;
+    const x=xOf(ci);
+    if(x<PAD.l||x>PAD.l+pw)continue;
+    const utcH=Math.floor(utcMin/60);
+    ctx.fillStyle='#99a';
+    ctx.fillText(String(utcH).padStart(2,'0')+'z',x,H-5);
+  }
+
+  // 破線（中央固定）
+  ctx.strokeStyle='rgba(255,255,255,0.40)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(nowX,PAD.t);ctx.lineTo(nowX,PAD.t+ph);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 中心線の上にUTC時刻表示（QSOs グラフのみ）
+  if(bgId==='bg-qsos'){
+    const ci=Math.round(nowIdx);
+    const clampedCi=Math.max(0,Math.min(totalSteps-1,ci));
+    const utcMs=((startUTCmin+clampedCi*resMin)*60*1000);
+    // RTモード中は実際のUTC秒も表示
+    let timeStr;
+    if(rtTimer){
+      const now=new Date();
+      const h=String(now.getUTCHours()).padStart(2,'0');
+      const m=String(now.getUTCMinutes()).padStart(2,'0');
+      const s=String(now.getUTCSeconds()).padStart(2,'0');
+      timeStr=`${h}:${m}:${s}z`;
+    } else {
+      const totalMin=(startUTCmin+clampedCi*resMin)%(24*60);
+      const h=String(Math.floor(totalMin/60)).padStart(2,'0');
+      const mn=String(totalMin%60).padStart(2,'0');
+      timeStr=`${h}:${mn}z`;
+    }
+    ctx.font='bold 20px monospace';ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.fillText(timeStr,nowX,1);
+  }
+
+  // バンドラベルをDOM要素で更新
+  const _lblMap={'bg-qsos':'lbl-qsos','bg-grids':'lbl-grids','bg-rbn-spots':'lbl-rbn-spots','bg-rbn-grids':'lbl-rbn-grids'};
+  const domLabelId=_lblMap[bgId];
+  const domLabel=document.getElementById(domLabelId);
+  if(domLabel){
+    const rightIdx=Math.min(totalSteps-1,Math.round(nowIdx+halfSteps));
+    let refIdx=rightIdx;
+    while(refIdx>0&&sumByStep[refIdx]===0)refIdx--;
+    const labelItems=[];
+    for(let b=1;b<=6;b++){
+      const vals=data[b].map(s=>s[key]);
+      if(vals.every(v=>v===0))continue;
+      const refVal=sumByStep[refIdx]>0?vals[refIdx]:0;
+      const yRatio=(1-Math.min(refVal,yMax)/yMax);
+      const yPct=(PAD.t+ph*yRatio)/H*100;
+      labelItems.push({b,yPct});
+    }
+    labelItems.sort((a,b)=>a.yPct-b.yPct);
+    const MIN_GAP_PCT=100*11/H;
+    for(let i=1;i<labelItems.length;i++)
+      if(labelItems[i].yPct-labelItems[i-1].yPct<MIN_GAP_PCT)
+        labelItems[i].yPct=labelItems[i-1].yPct+MIN_GAP_PCT;
+    for(let i=labelItems.length-2;i>=0;i--)
+      if(labelItems[i+1].yPct-labelItems[i].yPct<MIN_GAP_PCT)
+        labelItems[i].yPct=labelItems[i+1].yPct-MIN_GAP_PCT;
+    domLabel.innerHTML=labelItems.map(({b,yPct})=>
+      `<span class="band-label-item" style="top:${Math.max(2,Math.min(98,yPct)).toFixed(1)}%;color:${lineAlpha<1?bandColorAlpha(b,lineAlpha):BAND_COLORS[b]}">${BAND_NAMES[b]}</span>`
+    ).join('');
+  }
+}
+
+function drawChart(bgId, ovId, chartData, key, nowCI, lineAlpha=1.0){
+  _buildChartBg(bgId, ovId, chartData, key, lineAlpha);
+  _drawChartOverlay(bgId, ovId, (nowCI!==undefined&&nowCI!==null)?nowCI:(chartData?.centerContestIdx??0));
+}
+
+
+function computeRbnChartData(centerStep){
+  if(!allRbnData||!_rbnStepIndex)return null;
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??10;
+  const stepsPerDay=allData?.meta?.steps_per_day??144;
+  const stepsPerHour=60/resMin;
+  const halfSteps=Math.round(3*stepsPerHour);
+  const contestStartStep=Math.round(cfg.startHour*60/resMin);
+  const totalSteps=Math.round(cfg.hours*stepsPerHour);
+  const distKm=+document.getElementById('sld-lon').value;
+  const modeFilter=+document.getElementById('sel-mode').value;
+  const powerMax=+document.getElementById('sel-power').value;
+
+  const byBand={};
+  for(let b=1;b<=6;b++)
+    byBand[b]=Array.from({length:totalSteps},()=>({qso:0,grids:{},gc:0}));
+
+  for(let ci=0;ci<totalSteps;ci++){
+    const step=cfg.hours===48
+      ?(contestStartStep+ci)
+      :((contestStartStep+ci)%stepsPerDay+stepsPerDay)%stepsPerDay;
+    const recs=_rbnStepIndex[step]||[];
+    if(!recs.length)continue;
+    for(const rec of recs){
+      const b=rec[1];
+      if(b<1||b>6)continue;
+      if(modeFilter&&modeFilter!==1)continue;
+      if(powerMax>0&&rec[6]!=null&&rec[6]>0&&rec[6]>powerMax)continue;
+      const spottedGrid=allRbnData.grids[rec[0]]||allData?.grids[rec[0]];
+      const spotterGrid=allRbnData.grids[rec[4]]||allData?.grids[rec[4]];
+      // Cond1: spotted within dist → add spotter(rec[4])
+      if(spottedGrid&&gcDist(QY,QX,spottedGrid.lat,spottedGrid.lon)<=distKm){
+        if(spotterGrid){
+          byBand[b][ci].qso+=rec[5];
+          if(!byBand[b][ci].grids[rec[4]]){byBand[b][ci].grids[rec[4]]=1;byBand[b][ci].gc++;}
+        }
+      }
+      // Cond2: spotter within dist → add spotted(rec[0])
+      if(spotterGrid&&gcDist(QY,QX,spotterGrid.lat,spotterGrid.lon)<=distKm){
+        if(spottedGrid){
+          byBand[b][ci].qso+=rec[5];
+          if(!byBand[b][ci].grids[rec[0]]){byBand[b][ci].grids[rec[0]]=1;byBand[b][ci].gc++;}
+        }
+      }
+    }
+  }
+
+  const result={};
+  for(let b=1;b<=6;b++)
+    result[b]=byBand[b].map(s=>({qso:s.qso,grids:s.gc}));
+
+  const startUTCmin=cfg.startHour*60;
+  const centerContestIdx=cfg.hours===48
+    ?Math.max(0,centerStep-contestStartStep)
+    :((centerStep-contestStartStep)+stepsPerDay)%stepsPerDay;
+
+  return{data:result,halfSteps,totalSteps,resMin,stepsPerHour,
+         startUTCmin,contestStartStep,centerContestIdx,centerStep};
+}
+
+function _rbnChartsVisible(){
+  return !!(document.getElementById('chk-rbn')?.checked&&allRbnData);
+}
+
+function updateCharts(floatOffset){
+  const centerStep=getQueryStep();
+  const chartData=computeChartData(centerStep);
+  // 通常時(floatOffset未指定): centerContestIdxを使う
+  // 再生時(floatOffset指定): その値をそのまま使う
+  const nowCI=(floatOffset!==undefined&&floatOffset!==null)?floatOffset:(chartData.centerContestIdx??0);
+  drawChart('bg-grids','ov-grids',chartData,'grids',nowCI);
+  drawChart('bg-qsos', 'ov-qsos', chartData,'qso',  nowCI);
+  if(_rbnChartsVisible()){
+    const rcd=computeRbnChartData(centerStep);
+    if(rcd){
+      drawChart('bg-rbn-spots','ov-rbn-spots',rcd,'qso',   nowCI,0.7);
+      drawChart('bg-rbn-grids','ov-rbn-grids',rcd,'grids', nowCI,0.7);
+    }
+  }
+}
+
+function buildBandLegend(){
+  const el=document.getElementById('band-legend');
+  el.innerHTML='';
+  for(let b=1;b<=6;b++){
+    const span=document.createElement('span');
+    span.style.cssText='display:flex;align-items:center;gap:4px;';
+    span.innerHTML=`<span class="band-dot" style="background:${BAND_COLORS[b]}"></span>${BAND_NAMES[b]}`;
+    el.appendChild(span);
+  }
+}
+
+// ---- メイン描画 --------------------------------------------------------
+function drawMap(skipBuildProj){
+  if(!skipBuildProj)buildProj();
+  const pg=d3.geoPath(proj,c2);
+  const cx2=SZ/2,cy2=SZ/2,R=SZ/2-4;
+  c2.clearRect(0,0,SZ,SZ);
+  c2.save();
+  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);c2.clip();
+  c2.fillStyle='#000';c2.fillRect(0,0,SZ,SZ);
+
+  const f=getFilters();
+  const rxCount=queryHeatmap(f);
+  const maxC=allData?.meta?.max_count_per_cell||Math.max(1,...Object.values(rxCount));
+  let visGrids=0,totalQSO=0;
+
+  // 地形図・ベアリング・距離リングをオフスクリーンにキャッシュ
+  // キャッシュキー: 中心・ズーム・サイズ・輝度が変わったときのみ再描画
+  const bright=getBright();
+  const distKmMap=+document.getElementById('sld-lon').value;
+  const curStepKey=getQueryStep();
+  const rtSecKey=rtTimer?Math.floor(Date.now()/1000):0; // RTモード中は秒単位で変化
+  const offKey=`${CX.toFixed(4)},${CY.toFixed(4)},${radiusKm},${SZ},${bright.toFixed(2)},${distKmMap},${curStepKey},${rtSecKey}`;
+  if(!_offscreen||_offscreenKey!==offKey){
+    _offscreen=new OffscreenCanvas(SZ,SZ);
+    const oc=_offscreen.getContext('2d');
+    const opg=d3.geoPath(proj,oc);
+    // グレイライン: strokeなし、fillの重ね塗りで昼夜境界を表現
+    // アルゴリズム: 全面夜色 → dayCircle(92)薄オレンジ → dayCircle(91)濃オレンジ → dayCircle(90)黒(昼)
+    {
+      const resMin4=allData?.meta?.time_resolution_min??60;
+      // RTモード中は実際のUTC分を使用、それ以外はt_stepから計算
+      let utcMin4;
+      if(rtTimer){
+        const now4=new Date();
+        utcMin4=now4.getUTCHours()*60+now4.getUTCMinutes();
+      } else {
+        utcMin4=(curStepKey*resMin4)%(24*60);
+      }
+      const sol=solarPosition(utcMin4);
+      oc.save();
+      oc.beginPath();oc.arc(SZ/2,SZ/2,SZ/2-4,0,Math.PI*2);oc.clip();
+      // 全面: 黒（不透明確定）→ 夜色
+      oc.fillStyle='#000';oc.fillRect(0,0,SZ,SZ);
+      oc.fillStyle='rgba(5,10,40,0.68)';oc.fillRect(0,0,SZ,SZ);
+      // dayCircleを大→小の順でfill（昼側の内側から外側に向かって塗り重ねる）
+      const layers=[
+        [92,'rgba(40,18,0,1)'],   // 境界外縁（極薄オレンジ）
+        [91,'rgba(80,38,0,1)'],   // 境界本体（薄オレンジ）
+        [90,'#000'],              // 昼側（黒）
+      ];
+      for(const[r,col]of layers){
+        const gc=d3.geoCircle().center([sol.lon,sol.lat]).radius(r)();
+        oc.fillStyle=col;
+        oc.beginPath();opg(gc);oc.fill();
+      }
+      oc.restore();
+    }
+
+    // ベアリングライン
+    oc.save();
+    oc.beginPath();oc.arc(SZ/2,SZ/2,SZ/2-4,0,Math.PI*2);oc.clip();
+    oc.strokeStyle=`rgba(255,255,255,${(0.18*bright).toFixed(3)})`;oc.lineWidth=0.6;
+    for(let brg=0;brg<360;brg+=30){
+      const bRad=brg*Math.PI/180,pts=[];
+      for(let km=100;km<=20000;km+=200){
+        const d=km/6371,cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+        const lat2=Math.asin(Math.sin(cy)*Math.cos(d)+Math.cos(cy)*Math.sin(d)*Math.cos(bRad));
+        const lon2=cx+Math.atan2(Math.sin(bRad)*Math.sin(d)*Math.cos(cy),Math.cos(d)-Math.sin(cy)*Math.sin(lat2));
+        pts.push([lon2*180/Math.PI,lat2*180/Math.PI]);
+      }
+      oc.beginPath();opg({type:'Feature',geometry:{type:'LineString',coordinates:pts}});oc.stroke();
+    }
+    const lbls=['N','30','60','E','120','150','S','210','240','W','300','330'];
+    oc.fillStyle=`rgba(255,255,255,${(0.35*bright).toFixed(3)})`;oc.font='9px sans-serif';
+    oc.textAlign='center';oc.textBaseline='middle';
+    lbls.forEach((lbl,i)=>{
+      const brg=i*30*Math.PI/180,d=Math.min(radiusKm*0.92,19500)/6371;
+      const cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+      const lat2=Math.asin(Math.sin(cy)*Math.cos(d)+Math.cos(cy)*Math.sin(d)*Math.cos(brg));
+      const lon2=cx+Math.atan2(Math.sin(brg)*Math.sin(d)*Math.cos(cy),Math.cos(d)-Math.sin(cy)*Math.sin(lat2));
+      const pt=proj([lon2*180/Math.PI,lat2*180/Math.PI]);
+      if(pt&&pt[0]>8&&pt[0]<SZ-8&&pt[1]>8&&pt[1]<SZ-8)oc.fillText(lbl,pt[0],pt[1]);
+    });
+    // 地形図
+    if(worldFeatures){
+      oc.strokeStyle=`rgba(255,255,255,${(0.28*bright).toFixed(3)})`;oc.lineWidth=0.7;
+      oc.beginPath();opg(worldFeatures);oc.stroke();
+    }
+    // 距離リング
+    const ringSteps=[200,500,1000,2000,5000,10000];
+    const ringStep=ringSteps.find(s=>Math.floor(radiusKm/s)<=8)||10000;
+    oc.setLineDash([3,5]);oc.strokeStyle=`rgba(255,220,80,${(0.30*bright).toFixed(3)})`;oc.lineWidth=0.8;
+    for(let km=ringStep;km<=radiusKm;km+=ringStep){
+      const deg=km/111.32;if(deg>=175)continue; // 175度以上は投影端に近くなり外周円になるため除外
+      oc.beginPath();opg(d3.geoCircle().center([CX,CY]).radius(deg)());oc.stroke();
+      const lp=proj([CX,CY-deg+0.3]);
+      if(lp&&lp[0]>8&&lp[0]<SZ-8&&lp[1]>8&&lp[1]<SZ-8){
+        oc.setLineDash([]);
+        oc.fillStyle=`rgba(255,220,80,${(0.55*bright).toFixed(3)})`;oc.font='8px sans-serif';oc.textAlign='left';
+        oc.fillText(km.toLocaleString()+'km',lp[0]+3,lp[1]);
+        oc.setLineDash([3,5]);
+      }
+    }
+    oc.setLineDash([]);
+    // Dist円（フィルタ距離を水色の実線円で表示）
+    if(distKmMap>0&&distKmMap<=20000){
+      const distDeg=distKmMap/111.32;
+      if(distDeg<175){
+        oc.beginPath();
+        const opg2=d3.geoPath(proj,oc);
+        opg2(d3.geoCircle().center([CX,CY]).radius(distDeg)());
+        oc.strokeStyle=`rgba(100,200,255,${(0.7*bright).toFixed(3)})`;
+        oc.lineWidth=1.2;
+        oc.setLineDash([]);
+        oc.stroke();
+        const dp=proj([CX,CY-distDeg+0.3]);
+        if(dp&&dp[0]>8&&dp[0]<SZ-8&&dp[1]>8&&dp[1]<SZ-8){
+          oc.fillStyle=`rgba(100,200,255,${(0.85*bright).toFixed(3)})`;
+          oc.font='9px sans-serif';oc.textAlign='left';
+          oc.fillText(distKmMap.toLocaleString()+'km',dp[0]+3,dp[1]);
+        }
+      }
+    }
+    oc.restore();
+    _offscreenKey=offKey;
+  }
+  // キャッシュをメインcanvasに転送（高速）
+  c2.drawImage(_offscreen,0,0);
+
+  // ヒートマップセルをoffscreenの上に描画（点滅alpha適用）
+  const cellEntries=[];
+  _rxCountPerYear={};
+  // RBNカウント: {rx4: count} — QSOと同一ロケータの場合QSOを優先
+  const rbnCount=queryRbn(f);
+
+  if(allData){
+    const entries=Object.entries(rxCount).sort((a,b)=>a[1]-b[1]);
+    c2.globalAlpha=_blinkAlpha;
+    for(const[rx4,cnt]of entries){
+      const meta=allData.grids[rx4];if(!meta)continue;
+      const pt=proj([meta.lon,meta.lat]);if(!pt)continue;
+      const dx=pt[0]-cx2,dy=pt[1]-cy2;
+      if(dx*dx+dy*dy>(R+60)*(R+60))continue;
+      const col=heatColor(cnt/maxC);if(!col)continue;
+      c2.fillStyle=col;
+      if(drawCell(meta.lat,meta.lon)){c2.fill();visGrids++;totalQSO+=cnt;cellEntries.push([rx4,cnt,col]);}
+    }
+    // RBNのみのセル（QSOがないロケータ）を描画
+    if(document.getElementById('chk-rbn')?.checked&&allRbnData){
+      const rbnEntries=Object.entries(rbnCount)
+        .filter(([rx4])=>!(rx4 in rxCount))
+        .sort((a,b)=>a[1]-b[1]);
+      // maxRbnをqueryRbn結果の最大値から計算（静的なmax_count_per_cellは別スケールのため）
+      const maxRbn=rbnEntries.length>0?Math.max(...rbnEntries.map(([,v])=>v)):1;
+      for(const[rx4,cnt]of rbnEntries){
+        const grids=allRbnData.grids[rx4]||allData.grids[rx4];
+        if(!grids)continue;
+        const pt=proj([grids.lon,grids.lat]);if(!pt)continue;
+        const dx=pt[0]-cx2,dy=pt[1]-cy2;
+        if(dx*dx+dy*dy>(R+60)*(R+60))continue;
+        const col=rbnColor(cnt/maxRbn);if(!col)continue;
+        c2.fillStyle=col;
+        if(drawCell(grids.lat,grids.lon)){c2.fill();cellEntries.push([rx4,cnt,col,'rbn']);}
+      }
+    }
+    c2.globalAlpha=1.0;
+    // 年別QSO数集計（ツールチップ用）: _stepIndexから直接集計
+    const f2=getFilters();
+    const recs=_stepIndex?_stepIndex[f2.tStep]:allData.records;
+    if(recs){
+      for(const rec of recs){
+        if(f2.band&&rec[1]!==f2.band)continue;
+        if(f2.mode&&rec[2]!==f2.mode)continue;
+        if(typeof rec[4]==='string'){
+          const txMeta=allData.grids[rec[4]];
+          if(!txMeta||gcDist(QY,QX,txMeta.lat,txMeta.lon)>f2.distKm)continue;
+        }
+        const rx4=rec[0],year=rec[7]??'?',cnt=rec[5];
+        if(!_rxCountPerYear[rx4])_rxCountPerYear[rx4]={};
+        _rxCountPerYear[rx4][year]=(_rxCountPerYear[rx4][year]||0)+cnt;
+      }
+    }
+    // 点滅ループ用にキャッシュ保存
+    // 圏外グリッド数 = Distフィルタ内の全グリッド数 - 地図上に描画できたグリッド数
+    const totalFilteredGrids=Object.keys(rxCount).length;
+    const offscreenGrids=Math.max(0,totalFilteredGrids-visGrids);
+    // RBN圏外グリッド数
+    const f_rbn=getFilters();
+    const rbnCount_cache=queryRbn(f_rbn);
+    const totalRbnGrids=Object.keys(rbnCount_cache).length;
+    let visRbnGrids=0;
+    {
+      const mergedG=Object.assign({},allData.grids,allRbnData?.grids||{});
+      for(const rx4 of Object.keys(rbnCount_cache)){
+        const m=mergedG[rx4];if(!m)continue;
+        if(gcDist(QY,QX,m.lat,m.lon)<=radiusKm)visRbnGrids++;
+      }
+    }
+    const offscreenRbn=Math.max(0,totalRbnGrids-visRbnGrids);
+    const rbnMaxC=Object.values(rbnCount).length>0?Math.max(...Object.values(rbnCount)):1;
+    _blinkCellCache={rxCount,maxC,cx2,cy2,R,entries:cellEntries,grids:allData.grids,offscreenGrids,
+      rbnCount,rbnMaxC,offscreenRbn,
+      rbnGrids:{...allRbnData?.grids||{},...allData.grids},
+      rbnEnabled:document.getElementById('chk-rbn')?.checked};
+  }
+
+  // 圏外グリッド数表示更新
+  const offG=_blinkCellCache?.offscreenGrids??0;
+  const totalG=_blinkCellCache?Object.keys(_blinkCellCache.rxCount).length:0;
+  const ovOff=document.getElementById('ov-offscreen');
+  if(ovOff){
+    const DC='rgba(100,200,255,0.85)'; // Dist円色
+    const RED='#e44';
+    const pct=totalG>0?(offG/totalG*100):0;
+    const pctIsZero=(pct<0.05);
+    const dLen=Math.max(1,String(totalG).length);
+    const pLen2=5;
+    const numStr=String(offG).padStart(dLen,' ');
+    const denStr=String(totalG).padStart(dLen,' ');
+    const pctStr=pct.toFixed(1).padStart(pLen2,' ');
+    const numHtml=offG>0
+      ? `<span class="blink" style="color:${RED}">${numStr}</span>`
+      : `<span style="color:${DC}">${numStr}</span>`;
+    const denomHtml=`<span style="color:${DC}">/${denStr}</span>`;
+    const pctNumHtml=pctIsZero
+      ? `<span style="color:${DC}">${pctStr}</span>`
+      : `<span class="blink" style="color:${RED}">${pctStr}</span>`;
+    const parenHtml=`<span style="color:${DC}"> (</span>${pctNumHtml}<span style="color:${DC}">%)</span>`;
+    ovOff.innerHTML=`${numHtml}${denomHtml}${parenHtml}`;
+    ovOff._blink=(offG>0||!pctIsZero);
+    // 初期opacity設定
+    ovOff.querySelectorAll('.blink').forEach(el=>el.style.opacity=_blinkAlpha);
+  }
+
+  c2.restore();
+
+  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);
+  c2.strokeStyle='rgba(255,255,255,0.20)';c2.lineWidth=1.5;c2.stroke();
+
+  const cp=proj([CX,CY]);
+  if(cp){
+    c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
+    c2.fillStyle='#ee4444';c2.fill();
+    c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
+    c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';
+    c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
+  }
+
+  if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
+    const qp=proj([QX,QY]);
+    if(qp){c2.beginPath();c2.arc(qp[0],qp[1],4,0,Math.PI*2);
+      c2.fillStyle='#4af';c2.fill();c2.strokeStyle='#fff';c2.lineWidth=1;c2.stroke();}
+  }
+
+  c2.textAlign='center';c2.textBaseline='middle';
+  c2.fillStyle='rgba(255,255,255,0.30)';c2.font='10px sans-serif';
+  [['N',cx2,10],['E',SZ-8,cy2],['S',cx2,SZ-8],['W',8,cy2]]
+    .forEach(([l,x,y])=>c2.fillText(l,x,y));
+
+  const rDisp=Math.round(radiusKm).toLocaleString()+'km';
+  const fixed=document.getElementById('chk-fixed').checked;
+  document.getElementById('ov-center').textContent=
+    `Center: ${document.getElementById('inp-grid').value.toUpperCase()}`+
+    (!fixed&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)?`  Query: ${geoToGrid4(QX,QY)}`:'');
+  document.getElementById('ov-scale').textContent=`Radius: ${rDisp}`;
+  document.getElementById('ov-info').textContent=`${visGrids} grids · ${totalQSO.toLocaleString()} QSOs`;
+
+  // RBNパネル数表示更新
+  {
+    const rbnOn=document.getElementById('chk-rbn')?.checked&&allRbnData;
+    const statEl=document.getElementById('ov-rbn-stat');
+    const numsEl=document.getElementById('ov-rbn-nums');
+    const pctEl =document.getElementById('ov-rbn-pct');
+    if(statEl){
+      if(!rbnOn){
+        statEl.style.display='none';
+        statEl._blink=false;
+        const rbnInfoEl=document.getElementById('ov-rbn-info');
+        if(rbnInfoEl) rbnInfoEl.style.display='none';
+      } else {
+        const f=getFilters();
+        const rbnCount=queryRbn(f);
+        const totalRbn=Object.keys(rbnCount).length;
+        const mergedGrids=Object.assign({},allData?.grids,allRbnData.grids);
+        let visRbn=0;
+        for(const rx4 of Object.keys(rbnCount)){
+          const meta=mergedGrids[rx4];if(!meta)continue;
+          if(gcDist(QY,QX,meta.lat,meta.lon)<=radiusKm)visRbn++;
+        }
+        const hiddenRbn=totalRbn-visRbn;
+        const pct=totalRbn>0?Math.round(hiddenRbn/totalRbn*100):0;
+        const dLen=Math.max(1,String(totalRbn).length);
+        const shouldBlink=(hiddenRbn>0);
+        // 分子: 非表示数（hiddenRbn）
+        if(numsEl){
+          numsEl.textContent=String(hiddenRbn).padStart(dLen,' ');
+          numsEl.className=shouldBlink?'blink':'';
+          if(shouldBlink)numsEl.style.opacity=_blinkAlpha;
+        }
+        const denEl=document.getElementById('ov-rbn-den');
+        if(denEl) denEl.textContent=String(totalRbn).padStart(dLen,' ');
+        if(pctEl){
+          pctEl.textContent=String(pct).padStart(3,' ');
+          pctEl.className=shouldBlink?'blink':'';
+          if(shouldBlink)pctEl.style.opacity=_blinkAlpha;
+        }
+        statEl._blink=shouldBlink;
+        statEl.style.display='';
+
+        // RBN grids・spots数表示
+        const rbnInfoEl=document.getElementById('ov-rbn-info');
+        if(rbnInfoEl){
+          const rbnSpots=Object.values(rbnCount).reduce((s,v)=>s+v,0);
+          rbnInfoEl.textContent=`${totalRbn} grids · ${rbnSpots.toLocaleString()} spots`;
+          rbnInfoEl.style.display='';
+        }
+      }
+    }
+  }
+
+  syncRadiusSlider();
+  // radius-ctrlをoverlay-infoの直下に配置:
+  //   radius-ctrl は bottom:8px 固定
+  //   overlay-info は radius-ctrlの上 (bottom = 8 + rcHeight + 4)
+  {
+    const oi=document.getElementById('overlay-info');
+    const rc=document.getElementById('radius-ctrl');
+    if(oi&&rc){
+      rc.style.bottom='8px';
+      oi.style.bottom=(8+rc.offsetHeight+4)+'px';
+    }
+  }
+  // 三角インジケーター描画
+  drawOffscreenArrows(rxCount);
+  updateBandModeDisplay();
+
+  if(!_skipCharts)updateCharts();
+}
+
+// ---- リアルタイム再生 --------------------------------------------------
+// 最終週末判定: 今月の最後の土曜日
+function lastSaturdayOfMonth(date){
+  const d=new Date(date.getFullYear(),date.getMonth()+1,0); // 月末
+  d.setDate(d.getDate()-((d.getDay()+1)%7)); // 直前の土曜
+  return d;
+}
+
+function getRTStep(){
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??60;
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+  const now=new Date();
+  const utcHour=now.getUTCHours();
+  const utcMin=now.getUTCMinutes();
+  const totalMin=utcHour*60+utcMin;
+  const rawStep=Math.floor(totalMin/resMin);
+
+  if(cfg.hours===24){
+    // 24時間コンテスト: 現在UTC時刻をそのままステップに
+    return rawStep % stepsPerDay;
+  } else {
+    // 48時間コンテスト: t_stepは0〜(stepsPerDay*2-1)で一意
+    const lastSat=lastSaturdayOfMonth(now);
+    const lastSun=new Date(lastSat); lastSun.setDate(lastSat.getDate()+1);
+    const todayStr=now.toDateString();
+    const isLastWeekend=(todayStr===lastSat.toDateString()||todayStr===lastSun.toDateString());
+
+    let dayOffset=0;
+    if(isLastWeekend){
+      dayOffset=(todayStr===lastSun.toDateString())?1:0;
+    } else {
+      dayOffset=document.getElementById('chk-plus1d')?.checked?1:0;
+    }
+    // contest開始からの絶対分数 → t_step（折り返しなし）
+    const contestMin=dayOffset*1440+totalMin-cfg.startHour*60;
+    const s=Math.floor(contestMin/resMin);
+    const maxStep=stepsPerDay*2-1;
+    return Math.max(0,Math.min(maxStep,s));
+  }
+}
+
+// ---- バンド巡回（RTモード専用）------------------------------------------
+let _cycleTimer=null;
+let _cycleIdx=0;
+let _cycleSeq=[];   // [{band, mode}] のシーケンス
+let _cycleFromCode=false; // プログラム変更フラグ（手動変更検知除外用）
+
+// コンテストがモード固定かを返す: null=混在, 1=CW固定, 2=SSB固定
+function contestFixedMode(){
+  const k=document.getElementById('sel-contest').value;
+  if(k==='cqww_cw'||k==='cqwpx_cw')return 1;
+  if(k==='cqww_ssb'||k==='cqwpx_ssb')return 2;
+  return null;
+}
+
+// コンテスト固有の制約をUIに反映
+// CW固定: モードをCWに固定・選択不可
+// SSB固定: モードをSSBに固定・選択不可、RBNを無効化（RBNはCWのみ）
+// 混在: モード選択可能、RBN選択可能
+function applyContestConstraints(){
+  const fixedMode=contestFixedMode();
+  const selMode=document.getElementById('sel-mode');
+  const chkRbn=document.getElementById('chk-rbn');
+  const lblRbn=chkRbn?.closest('label');
+  const isSSB=(fixedMode===2);
+
+  selMode.disabled=(fixedMode!==null);
+  if(fixedMode!==null) selMode.value=fixedMode;
+
+  if(chkRbn){
+    if(isSSB){chkRbn.checked=false;chkRbn.disabled=true;}
+    else{chkRbn.disabled=false;}
+    if(lblRbn) lblRbn.style.opacity=isSSB?'0.4':'';
+  }
+  updateBandModeDisplay();
+}
+
+// 全巡回シーケンス: 160m(1)→…→10m(6)、各バンドでAll→CW→SSBの順
+// モード固定コンテストはモード巡回なし（固定モードのみ）
+function buildAllCycleSeq(){
+  const fixedMode=contestFixedMode();
+  const bands=[1,2,3,4,5,6];
+  const modes=fixedMode?[fixedMode]:[0,1,2]; // All=0, CW=1, SSB=2
+  const seq=[];
+  for(const b of bands) for(const m of modes) seq.push({band:b,mode:m});
+  return seq;
+}
+
+// 自動巡回シーケンス: 現時間帯のQSO数降順、15%未満スキップ、モード扱いは全巡回と同
+function buildAutoCycleSeq(){
+  if(!allData||!_stepIndex)return buildAllCycleSeq();
+  const fixedMode=contestFixedMode();
+  const modes=fixedMode?[fixedMode]:[0,1,2];
+  const f=getFilters(); // distKm・powerMax等を含む現在のフィルタ
+  const tStep=f.tStep;
+  // バンド別QSO数を集計（距離フィルタ・powerフィルタ適用、バンドはAll扱い）
+  const bandQso={};
+  for(const rec of (_stepIndex[tStep]||[])){
+    // powerフィルタ
+    if(f.powerMax>0&&rec[6]!=null&&rec[6]>0&&rec[6]>f.powerMax)continue;
+    // 距離フィルタ
+    if(typeof rec[4]==='string'){
+      const txMeta=allData.grids[rec[4]];
+      if(!txMeta)continue;
+      if(gcDist(QY,QX,txMeta.lat,txMeta.lon)>f.distKm)continue;
+    } else {
+      if(rec[4]<QX-f.lonRange||rec[4]>QX+f.lonRange)continue;
+    }
+    const b=rec[1];
+    bandQso[b]=(bandQso[b]||0)+rec[5];
+  }
+  const total=Object.values(bandQso).reduce((s,v)=>s+v,0);
+  if(total===0)return buildAllCycleSeq();
+  const threshold=total*0.15;
+  // 閾値以上のバンドをQSO数降順にソート
+  const sorted=Object.entries(bandQso)
+    .filter(([,v])=>v>=threshold)
+    .sort((a,b2)=>b2[1]-a[1])
+    .map(([b])=>+b);
+  if(sorted.length===0)return buildAllCycleSeq();
+  const seq=[];
+  for(const b of sorted) for(const m of modes) seq.push({band:b,mode:m});
+  return seq;
+}
+
+function getCycleMode(){
+  return document.querySelector('input[name="rt-cycle"]:checked')?.value??'none';
+}
+
+function getCycleInterval(){
+  return +(document.querySelector('input[name="rt-crawl-timer"]:checked')?.value??5)*1000;
+}
+
+let _cycleCountdownRaf=null;
+let _cycleNextAt=0; // 次の切り替え時刻(ms, performance.now基準)
+
+function _updateCrawlCountdown(){
+  const el=document.getElementById('crawl-countdown');
+  if(!el)return;
+  if(!_cycleTimer){el.textContent='';_cycleCountdownRaf=null;return;}
+  const rem=Math.max(0,Math.ceil((_cycleNextAt-performance.now())/1000));
+  el.textContent=rem+'s';
+  _cycleCountdownRaf=requestAnimationFrame(_updateCrawlCountdown);
+}
+
+function applyCycleStep(){
+  if(!_cycleSeq.length)return;
+  _cycleIdx=_cycleIdx%_cycleSeq.length;
+  const{band,mode}=_cycleSeq[_cycleIdx];
+  _cycleFromCode=true;
+  document.getElementById('sel-band').value=band;
+  document.getElementById('sel-mode').value=mode;
+  _cycleFromCode=false;
+  updateBandModeDisplay();
+  drawMap();
+}
+
+function startCycle(){
+  stopCycle();
+  const mode=getCycleMode();
+  if(mode==='none')return;
+  const intervalMs=getCycleInterval();
+  _cycleSeq=mode==='all'?buildAllCycleSeq():buildAutoCycleSeq();
+  _cycleIdx=0;
+  applyCycleStep();
+  _cycleNextAt=performance.now()+intervalMs;
+  _cycleTimer=setInterval(()=>{
+    if(getCycleMode()==='auto') _cycleSeq=buildAutoCycleSeq();
+    _cycleIdx=(_cycleIdx+1)%_cycleSeq.length;
+    applyCycleStep();
+    _cycleNextAt=performance.now()+getCycleInterval();
+  },intervalMs);
+  // カウントダウン開始
+  if(_cycleCountdownRaf){cancelAnimationFrame(_cycleCountdownRaf);_cycleCountdownRaf=null;}
+  _cycleCountdownRaf=requestAnimationFrame(_updateCrawlCountdown);
+}
+
+function stopCycle(){
+  if(_cycleTimer){clearInterval(_cycleTimer);_cycleTimer=null;}
+  if(_cycleCountdownRaf){cancelAnimationFrame(_cycleCountdownRaf);_cycleCountdownRaf=null;}
+  _cycleSeq=[];_cycleIdx=0;
+  const el=document.getElementById('crawl-countdown');
+  if(el)el.textContent='';
+}
+
+// Cycleラジオボタン変更時: RTモード中であれば巡回を再起動
+document.querySelectorAll('input[name="rt-cycle"]').forEach(r=>r.addEventListener('change',()=>{
+  const btn=document.getElementById('btn-rtplay');
+  if(btn.textContent.includes('Stop')){
+    startCycle();
+  }
+}));
+// Crawl Timerラジオ変更時: RT中かつ巡回中なら再起動
+document.querySelectorAll('input[name="rt-crawl-timer"]').forEach(r=>r.addEventListener('change',()=>{
+  const btn=document.getElementById('btn-rtplay');
+  if(btn.textContent.includes('Stop')&&_cycleTimer){
+    startCycle();
+  }
+}));
+
+function stopAll(){
+  if(animTimer){
+    try{cancelAnimationFrame(animTimer);}catch(e){}
+    try{clearInterval(animTimer);}catch(e){}
+    animTimer=null;
+  }
+  if(chartRafId){cancelAnimationFrame(chartRafId);chartRafId=null;}
+  if(rtTimer){clearInterval(rtTimer);clearTimeout(rtTimer);rtTimer=null;}
+  if(_rtRafId){cancelAnimationFrame(_rtRafId);_rtRafId=null;}
+  if(_arrowBlink.raf){cancelAnimationFrame(_arrowBlink.raf);_arrowBlink.raf=null;}
+  stopCycle();
+  // スライダーを有効化
+  document.getElementById('sld-hour').disabled=false;
+  document.getElementById('sld-hour').style.opacity='';
+  // Cycle行を有効化
+  setCycleRowEnabled(true);
+  // Play/RTボタンを再生状態に戻す
+  const bp=document.getElementById('btn-play');
+  bp.textContent='▶ Play'; bp.disabled=false;
+  bp.dataset.tip=t('btn_play');
+  bp.classList.remove('btn-running');
+  const br=document.getElementById('btn-rtplay');
+  br.textContent='⏱ RT'; br.disabled=false;
+  br.classList.remove('btn-running-rt');
+  // rtplay-day は削除済みのため制御不要
+}
+
+document.getElementById('btn-play').addEventListener('click',function(){
+  if(this.textContent.includes('Stop')){stopAll();drawMap();return;}
+  stopAll();
+  this.textContent='■ Stop'; this.dataset.tip=t('play_stop');
+  this.classList.add('btn-running');
+  document.getElementById('btn-rtplay').disabled=true;
+  setCycleRowEnabled(false);
+  const sld=document.getElementById('sld-hour');
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+  const cfg_play=contestCfg();
+  const totalStepsPlay=cfg_play.hours===48 ? stepsPerDay*2 : stepsPerDay;
+  sld.max=totalStepsPlay-1;
+  sld.style.width=(cfg_play.hours===48?'320px':'160px');
+  const msPerStep=30000/stepsPerDay;
+  let floatStep=+sld.value;
+  let prevIntStep=-1;
+  let lastTs=null;
+  let cachedChartData={grids:null,qso:null};
+
+  // 再生開始時刻を記録（floatStepを絶対時刻から計算）
+  const playStartTs=performance.now();
+  const playStartStep=floatStep;
+
+  // キャッシュ
+  let cachedHeatmap=null; // queryHeatmap結果
+  let cachedMaxC=1;
+
+  // 初回: buildProj + チャート背景を1回だけ構築（コンテスト全体を対象）
+  buildProj();
+  // チャートデータはコンテスト開始ステップ+3時間を中心に構築
+  // 以後再生中は再構築せず、floatStepをそのまま渡してスクロール
+  const cfg2=contestCfg();
+  const resMinPlay=allData?.meta?.time_resolution_min??60;
+  // initCenterStepはt_step（getQueryStepで正しく変換）
+  const initCenterStep=getQueryStep();
+  // floatStepもt_stepベースに変更
+  floatStep=initCenterStep;
+  const cd0=computeChartData(initCenterStep);
+  const initContestIdx=cd0.centerContestIdx??0; // 再生ループで参照
+  const contestTotalStepsPlay=cd0.totalSteps;   // 再生ループで参照
+  {
+    _buildChartBg('bg-grids','ov-grids',cd0,'grids');
+    _buildChartBg('bg-qsos', 'ov-qsos', cd0,'qso');
+    _drawChartOverlay('bg-grids','ov-grids',initContestIdx);
+    _drawChartOverlay('bg-qsos', 'ov-qsos', initContestIdx);
+    if(_rbnChartsVisible()){
+      const rcd0=computeRbnChartData(initCenterStep);
+      if(rcd0){
+        _buildChartBg('bg-rbn-spots','ov-rbn-spots',rcd0,'qso',   0.7);
+        _buildChartBg('bg-rbn-grids','ov-rbn-grids',rcd0,'grids', 0.7);
+        _drawChartOverlay('bg-rbn-spots','ov-rbn-spots',initContestIdx);
+        _drawChartOverlay('bg-rbn-grids','ov-rbn-grids',initContestIdx);
+      }
+    }
+    sld.value=initCenterStep;
+    updateInpHour(initCenterStep);
+    _skipCharts=true; drawMap(true); _skipCharts=false;
+  }
+
+  let chartUpdatePending=false;
+
+  function rafStep(ts){
+    floatStep=playStartStep+(ts-playStartTs)/msPerStep;
+    // 終了はnowCI>=contestTotalStepsPlayで判定するためここでは不要
+
+    // 48h: intStepは0〜287で一意（折り返しなし）、24h: 従来通り折り返し
+    const totalStepsPlay=cfg_play.hours===48?stepsPerDay*2:stepsPerDay;
+    const intStep=Math.min(totalStepsPlay-1, Math.floor(floatStep));
+
+    // 整数ステップ変化時: ヒートマップ更新（チャートは再構築しない）
+    if(intStep!==prevIntStep){
+      prevIntStep=intStep;
+      sld.value=intStep;
+      updateInpHour(intStep);
+      if(!chartUpdatePending){
+        chartUpdatePending=true;
+        // ヒートマップを次フレームに分散
+        requestAnimationFrame(()=>{
+          _skipCharts=true; drawMap(true); _skipCharts=false;
+          chartUpdatePending=false;
+        });
+      }
+    }
+
+    // nowCI: 現在のコンテスト内インデックス（小数）
+    // initCIは再生開始時に計算済み（initContestIdx）
+    const nowCI=initContestIdx+(floatStep-playStartStep);
+    // コンテスト終了チェック
+    if(nowCI>=contestTotalStepsPlay){stopAll();drawMap();return;}
+    _drawChartOverlay('bg-grids','ov-grids',nowCI);
+    _drawChartOverlay('bg-qsos', 'ov-qsos', nowCI);
+    if(_rbnChartsVisible()){
+      _drawChartOverlay('bg-rbn-spots','ov-rbn-spots',nowCI);
+      _drawChartOverlay('bg-rbn-grids','ov-rbn-grids',nowCI);
+    }
+
+    animTimer=requestAnimationFrame(rafStep);
+  }
+  animTimer=requestAnimationFrame(rafStep);
+});
+
+document.getElementById('btn-rtplay').addEventListener('click',function(){
+  if(this.textContent.includes('Stop')){stopAll();drawMap();return;}
+  stopAll();
+  this.textContent='■ Stop'; this.dataset.tip=t('rt_stop');
+  this.classList.add('btn-running-rt');
+  document.getElementById('btn-play').disabled=true;
+  // スライダーをグレーアウト
+  document.getElementById('sld-hour').disabled=true;
+  document.getElementById('sld-hour').style.opacity='0.3';
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??60;
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+
+  // 48時間コンテストで最終週末でない場合はDay選択を表示
+  if(cfg.hours===48){
+    const now=new Date();
+    const lastSat=lastSaturdayOfMonth(now);
+    const lastSun=new Date(lastSat); lastSun.setDate(lastSat.getDate()+1);
+    const todayStr=now.toDateString();
+    const isLastWeekend=(todayStr===lastSat.toDateString()||todayStr===lastSun.toDateString());
+    if(!isLastWeekend){
+      document.getElementById('rtplay-day')?.remove();
+    }
+  }
+
+  function tick(){
+    const tStep=getRTStep();
+    const cfg2=contestCfg();
+    const resMin2=allData?.meta?.time_resolution_min??60;
+    const stepsPerDay2=allData?.meta?.steps_per_day??24;
+    const startStep=Math.round(cfg2.startHour*60/resMin2);
+    // 48h: tStepは0〜287で一意。sld.valueもそのまま（sld.max=287）
+    // 24h: 従来通り折り返し
+    const sldVal=cfg2.hours===48
+      ? Math.max(0, tStep-startStep)
+      : ((tStep-startStep)+stepsPerDay2)%stepsPerDay2;
+    const sld=document.getElementById('sld-hour');
+    sld.value=sldVal;
+    updateInpHour(sldVal);
+    drawMap();
+  }
+  tick();
+  // 次の10分境界まで待ってからsetInterval（10分毎にtick）
+  {
+    const now0=new Date();
+    const msToNext=(600-now0.getUTCSeconds()%600)*1000-now0.getUTCMilliseconds();
+    rtTimer=setTimeout(()=>{
+      if(!rtTimer)return;
+      tick();
+      rtTimer=setInterval(tick, 600*1000);
+    }, Math.max(100,msToNext));
+  }
+  // バンド巡回開始
+  startCycle();
+
+  // RAFで毎フレーム更新（グラフ連続スクロール＋1秒毎日照更新）
+  let _rtLastSec=-1;
+  function rtRafLoop(){
+    _rtRafId=requestAnimationFrame(rtRafLoop);
+    const cfg3=contestCfg();
+    const resMin3=allData?.meta?.time_resolution_min??60;
+    const stepsPerDay3=allData?.meta?.steps_per_day??24;
+    const startStep3=Math.round(cfg3.startHour*60/resMin3);
+    const tStep3=getRTStep();
+    const now3=new Date();
+    // 現在秒のresMin内での進捗（0.0〜1.0）を小数として加算
+    const secInStep=(now3.getUTCMinutes()%resMin3*60+now3.getUTCSeconds())/(resMin3*60);
+    // 48h: tStep3は0〜287で一意。24h: 従来通り折り返し
+    const nowCI=cfg3.hours===48
+      ? Math.max(0, tStep3-startStep3)+secInStep
+      : ((tStep3-startStep3)+stepsPerDay3)%stepsPerDay3+secInStep;
+    // グラフoverlay毎フレーム更新（連続スクロール）
+    if(_chartBg['bg-qsos']) _chartBg['bg-qsos'].startContestIdx=nowCI;
+    if(_chartBg['bg-grids']) _chartBg['bg-grids'].startContestIdx=nowCI;
+    if(_chartBg['bg-rbn-spots']) _chartBg['bg-rbn-spots'].startContestIdx=nowCI;
+    if(_chartBg['bg-rbn-grids']) _chartBg['bg-rbn-grids'].startContestIdx=nowCI;
+    _drawChartOverlay('bg-qsos','ov-qsos',nowCI);
+    _drawChartOverlay('bg-grids','ov-grids',nowCI);
+    if(_rbnChartsVisible()){
+      _drawChartOverlay('bg-rbn-spots','ov-rbn-spots',nowCI);
+      _drawChartOverlay('bg-rbn-grids','ov-rbn-grids',nowCI);
+    }
+    // 1秒ごとに地図の日照を更新（offKeyにrtSecKeyが含まれるので自動的に再描画）
+    const curSec=now3.getUTCSeconds();
+    if(curSec!==_rtLastSec){
+      _rtLastSec=curSec;
+      _skipCharts=true; drawMap(true); _skipCharts=false;
+    }
+  }
+  _rtRafId=requestAnimationFrame(rtRafLoop);
+});
+
+// ---- コントロール ------------------------------------------------------
+function parseGrid(g){
+  g=g.toUpperCase().trim();if(g.length<4)return null;
+  const lon=(g.charCodeAt(0)-65)*20-180+parseInt(g[2])*2+1;
+  const lat=(g.charCodeAt(1)-65)*10-90+parseInt(g[3])*1+0.5;
+  return isNaN(lon)||isNaN(lat)?null:[lat,lon];
+}
+
+document.getElementById('btn-apply').addEventListener('click',()=>{
+  const c=parseGrid(document.getElementById('inp-grid').value);
+  if(!c){alert('Invalid grid');return;}
+  CY=c[0];CX=c[1];QX=CX;QY=CY;
+  setApplyDirty(false);
+  drawMap();
+});
+document.getElementById('inp-grid').addEventListener('keydown',e=>{
+  if(e.key==='Enter')document.getElementById('btn-apply').click();
+});
+document.getElementById('inp-grid').addEventListener('input',()=>{
+  setApplyDirty(true);
+});
+
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  // Set Defaultの内容があればそれを復元、なければハードコードの初期値
+  let d=null;
+  try{d=JSON.parse(localStorage.getItem(LS_KEY)||'null');}catch(e){}
+  if(d){
+    applyDefaults();
+    // radiusKmはapplyDefaults内で設定済み
+  } else {
+    // ハードコード初期値（PM52hu = JO02相当の座標）
+    CX=CX0;CY=CY0;QX=CX0;QY=CY0;
+    radiusKm=SCALE_DEFAULT;
+    document.getElementById('inp-grid').value='JO02';
+    document.getElementById('sld-lon').value=500;
+    document.getElementById('lbl-lon').textContent='500km';
+  }
+  document.getElementById('sld-hour').value=0;
+  updateInpHour(0);
+  setApplyDirty(false);
+  stopAll();
+  _offscreen=null;_offscreenKey=null;
+  Object.keys(_chartBg).forEach(k=>delete _chartBg[k]);
+  loadData();
+});
+document.getElementById('sld-hour').addEventListener('input',function(){
+  updateInpHour(+this.value);drawMap();
+});
+
+// inp-hour: フォーカスアウト時にスライダーへ反映
+document.getElementById('inp-hour').addEventListener('change',function(){
+  _applyInpHour();
+});
+document.getElementById('inp-hour').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){ this.blur(); }
+});
+function _applyInpHour(){
+  const inp=document.getElementById('inp-hour');
+  const cfg=contestCfg();
+  const resMin=allData?.meta?.time_resolution_min??60;
+  const stepsPerDay=allData?.meta?.steps_per_day??24;
+  const startStep=Math.round(cfg.startHour*60/resMin);
+  // HH:MM をパース
+  const m=inp.value.match(/^(\d{1,2}):(\d{2})$/);
+  if(!m){ updateInpHour(+document.getElementById('sld-hour').value); return; }
+  let hh=parseInt(m[1],10);
+  let mm=Math.floor(parseInt(m[2],10)/10)*10; // 10分単位に丸め
+  // 48時間コンテスト: +1dチェックで+24h
+  if(cfg.hours===48){
+    const chk=document.getElementById('chk-plus1d');
+    if(chk&&chk.checked) hh+=24;
+  }
+  const totalMin=hh*60+mm;
+  const step=Math.round(totalMin/resMin)-startStep;
+  const maxStep=cfg.hours===48?stepsPerDay*2-1:stepsPerDay-1;
+  const clamp=Math.max(0,Math.min(maxStep,step));
+  document.getElementById('sld-hour').value=clamp;
+  updateInpHour(clamp);
+  requestAnimationFrame(()=>drawMap());
+}
+
+// chk-plus1d変更時もスライダーに反映
+document.getElementById('chk-plus1d').addEventListener('change',function(){
+  _applyInpHour();
+});
+
+// ---- JSツールチップ -------------------------------------------------------
+{
+  const tip=document.getElementById('ui-tooltip');
+  let _tipTimer=null;
+  let _tipHideTimer=null;
+  function resetHideTimer(){
+    clearTimeout(_tipHideTimer);
+    _tipHideTimer=setTimeout(()=>{ tip.style.display='none'; },5000);
+  }
+  function placeTip(e,el){
+    tip.style.display='block';
+    const above=el.dataset.tipAbove;
+    const left=el.dataset.tipLeft;
+    let x,y;
+    if(left){
+      // スライダー左側に表示: ツールチップの右端がマウスX位置
+      const w=tip.offsetWidth;
+      x=Math.max(4, e.clientX-w-8);
+      y=Math.min(e.clientY+18, window.innerHeight-tip.offsetHeight-8);
+    } else if(above){
+      x=Math.min(e.clientX+12, window.innerWidth-tip.offsetWidth-8);
+      y=Math.max(e.clientY-tip.offsetHeight-8, 4);
+    } else {
+      x=Math.min(e.clientX+12, window.innerWidth-tip.offsetWidth-8);
+      y=Math.min(e.clientY+18, window.innerHeight-tip.offsetHeight-8);
+    }
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  }
+  document.addEventListener('mouseover',e=>{
+    const elOv=e.target.closest('[data-tip-ov]');
+    if(elOv){
+      clearTimeout(_tipTimer);
+      _tipTimer=setTimeout(()=>{
+        const type=elOv.dataset.tipOv;
+        let html='';
+        if(type==='qso'&&_blinkCellCache){
+          const offG=_blinkCellCache.offscreenGrids??0;
+          const totalG=Object.keys(_blinkCellCache.rxCount||{}).length;
+          const pct=totalG>0?(offG/totalG*100).toFixed(1):0;
+          html=isJa
+            ?`未表示ロケータ: ${offG}/${totalG} (${pct}%)<br><span style="color:#888;font-size:10px;">クリックで表示範囲をデフォルトに戻す</span>`
+            :`Off-screen grids: ${offG}/${totalG} (${pct}%)<br><span style="color:#888;font-size:10px;">Click to reset view</span>`;
+        } else if(type==='rbn'&&_blinkCellCache){
+          const rbnCount=_blinkCellCache.rbnCount||{};
+          const totalRbn=Object.keys(rbnCount).length;
+          const visRbn=totalRbn-(_blinkCellCache.offscreenRbn??0);
+          const pct=totalRbn>0?((totalRbn-visRbn)/totalRbn*100).toFixed(1):0;
+          html=isJa
+            ?`未表示RBNロケータ: ${totalRbn-visRbn}/${totalRbn} (${pct}%)<br><span style="color:#888;font-size:10px;">クリックで表示範囲をデフォルトに戻す</span>`
+            :`Off-screen RBN grids: ${totalRbn-visRbn}/${totalRbn} (${pct}%)<br><span style="color:#888;font-size:10px;">Click to reset view</span>`;
+        }
+        if(html){tip.innerHTML=html;placeTip(e,elOv);resetHideTimer();}
+      },300);
+      return;
+    }
+    const el=e.target.closest('[data-tip]');
+    if(!el){tip.style.display='none';clearTimeout(_tipHideTimer);return;}
+    clearTimeout(_tipTimer);
+    _tipTimer=setTimeout(()=>{
+      tip.textContent=el.dataset.tip;
+      placeTip(e,el);
+      resetHideTimer();
+    },300);
+  });
+  document.addEventListener('mousemove',e=>{
+    if(tip.style.display==='none')return;
+    const el=e.target.closest('[data-tip],[data-tip-ov]');
+    if(!el)return;
+    placeTip(e,el);
+    resetHideTimer();
+  });
+  document.addEventListener('mouseout',e=>{
+    if(!e.target.closest('[data-tip],[data-tip-ov]'))return;
+    clearTimeout(_tipTimer);
+    clearTimeout(_tipHideTimer);
+    tip.style.display='none';
+  });
+}
+
+// ---- Year チェックボックス（常時表示）------------------------------------
+function getSelectedYears(){
+  return [...document.querySelectorAll('#year-panel input[type=checkbox]:checked')]
+    .map(cb=>+cb.value);
+}
+
+function updateYearPanel(){
+  const cfg=contestCfg();
+  const panel=document.getElementById('year-panel');
+  const prev=getSelectedYears();
+  panel.innerHTML='';
+  [...cfg.years].reverse().forEach(y=>{
+    const label=document.createElement('label');
+    label.className='year-item';
+    const cb=document.createElement('input');
+    cb.type='checkbox'; cb.value=y;
+    cb.checked=prev.length>0?prev.includes(y):(y===cfg.years[cfg.years.length-1]);
+    cb.addEventListener('change',()=>loadData());
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(y));
+    panel.appendChild(label);
+  });
+}
+
+document.getElementById('sel-contest').addEventListener('change',()=>{
+  updateYearPanel();
+  applyContestConstraints();
+  loadData();
+});
+document.getElementById('sld-lon').addEventListener('input',function(){
+  document.getElementById('lbl-lon').textContent=this.value+'km';drawMap();
+});
+['sel-power','chk-fixed'].forEach(id=>
+  document.getElementById(id).addEventListener('change',()=>{updateBandModeDisplay();drawMap();}));
+['sel-band','sel-mode'].forEach(id=>
+  document.getElementById(id).addEventListener('change',()=>{
+    if(!_cycleFromCode&&_cycleTimer){
+      // 手動変更→巡回なしに切り替え
+      stopCycle();
+      const noneRadio=document.querySelector('input[name="rt-cycle"][value="none"]');
+      if(noneRadio)noneRadio.checked=true;
+    }
+    updateBandModeDisplay();drawMap();
+  }));
+let _resizeDebounce=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(_resizeDebounce);
+  _resizeDebounce=setTimeout(()=>{
+    _offscreen=null; _offscreenKey=null;
+    Object.keys(_chartBg).forEach(k=>delete _chartBg[k]);
+    drawMap(false);
+  },120);
+});
+document.getElementById('sld-bright').addEventListener('input',function(){
+  document.getElementById('lbl-bright').textContent=this.value+'%';drawMap();
+});
+
+// Radiusスライダーイベント
+{
+  const sl=document.getElementById('sld-radius');
+  if(sl){
+    sl.max=RADIUS_STEPS.length-1;
+    sl.addEventListener('input',function(){
+      radiusKm=sliderIdxToRadius(+this.value);
+      document.getElementById('lbl-radius').textContent=radiusKm.toLocaleString()+'km';
+      _offscreen=null;_offscreenKey=null;
+      Object.keys(_chartBg).forEach(k=>delete _chartBg[k]);
+      drawMap();
+    });
+  }
+}
+
+// ---- 圏外三角インジケーター -------------------------------------------
+// 三角点滅用（全体blinkとは独立）
+
+// グリッドが大圏地図の「外側」かどうか判定
+// 外側: projで円の外、またはパネルの1/5以下しか見えていない
+function isGridOffscreen(meta){
+  const pt=proj([meta.lon,meta.lat]);
+  if(!pt)return true; // 投影不可=完全圏外
+  const cx2=SZ/2,cy2=SZ/2,R=SZ/2-4;
+  const dx=pt[0]-cx2,dy=pt[1]-cy2;
+  const distFromCenter=Math.sqrt(dx*dx+dy*dy);
+  if(distFromCenter<=R*0.9)return false; // 明らかに内側
+
+  // パネルの4隅のうち何割が円内か判定（1/5=20%以下なら外側）
+  const pe=proj([meta.lon+2,meta.lat]);
+  const pn=proj([meta.lon,meta.lat+1]);
+  if(!pe||!pn)return true;
+  const eX=(pe[0]-pt[0])/2,eY=(pe[1]-pt[1])/2;
+  const nX=(pn[0]-pt[0])/2,nY=(pn[1]-pt[1])/2;
+  const corners=[
+    [pt[0]-eX-nX,pt[1]-eY-nY],[pt[0]+eX-nX,pt[1]+eY-nY],
+    [pt[0]+eX+nX,pt[1]+eY+nY],[pt[0]-eX+nX,pt[1]-eY+nY]
+  ];
+  const inside=corners.filter(([x,y])=>{
+    const ddx=x-cx2,ddy=y-cy2;return ddx*ddx+ddy*ddy<=R*R;
+  }).length;
+  return inside<=1; // 4隅のうち1個以下(≦25%<1/5相当)が円内なら外側
+}
+
+// 方位角計算（中心から対象グリッドへ、度数法0〜360）
+function bearingTo(lat,lon){
+  const cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+  const tx=lon*Math.PI/180,ty=lat*Math.PI/180;
+  const dlon=tx-cx;
+  const y=Math.sin(dlon)*Math.cos(ty);
+  const x=Math.cos(cy)*Math.sin(ty)-Math.sin(cy)*Math.cos(ty)*Math.cos(dlon);
+  return((Math.atan2(y,x)*180/Math.PI)+360)%360;
+}
+
+// 外周からグリッドまでの距離からサイズ段階(0〜6、0=最大)を取得
+const ARROW_DIST_STEPS=[500,1000,2000,5000,10000,15000,20000];
+function distToSizeIdx(km){
+  for(let i=0;i<ARROW_DIST_STEPS.length;i++){
+    if(km<=ARROW_DIST_STEPS[i])return i;
+  }
+  return ARROW_DIST_STEPS.length-1;
+}
+// サイズ段階→実際の三角サイズ（px）：大きいほど大きい
+const ARROW_SIZES=[18,15,13,10,8,6,5]; // index0=最大(500km以内)
+
+// 三角を1個描画（頂点が外向き）
+function drawOneArrow(ctx,brgDeg,distFromEdgePx,sizePx,alpha){
+  const cx2=SZ/2,cy2=SZ/2,R=SZ/2-4;
+  const MARGIN=20; // 外周から内側へのマージン(px)
+  const brgRad=brgDeg*Math.PI/180;
+  // 配置中心: 外周からMARGIN内側
+  const px=cx2+(R-MARGIN)*Math.sin(brgRad);
+  const py=cy2-(R-MARGIN)*Math.cos(brgRad);
+  // 三角: 頂点が外向き（brgRad方向）、底辺が内側
+  const tip=sizePx;
+  const half=sizePx*0.55;
+  ctx.save();
+  ctx.translate(px,py);
+  ctx.rotate(brgRad); // 頂点が外向き
+  ctx.globalAlpha=alpha;
+  ctx.beginPath();
+  ctx.moveTo(tip,0);          // 先端（外側）
+  ctx.lineTo(-tip,-half);     // 底辺左
+  ctx.lineTo(-tip, half);     // 底辺右
+  ctx.closePath();
+  ctx.strokeStyle='#fff';
+  ctx.lineWidth=1.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// キャッシュ: 前回の三角データ
+
+function drawOffscreenArrows(rxCount){
+  if(!allData||!proj)return;
+
+  // QSO圏外グリッドを方位角10°グループに集約
+  const groups={}; // key=10度単位の方位角スロット
+  if(rxCount){
+    for(const[rx4,qsoCount]of Object.entries(rxCount)){
+      const meta=allData.grids[rx4];if(!meta)continue;
+      if(!isGridOffscreen(meta))continue;
+      const brg=bearingTo(meta.lat,meta.lon);
+      const slot=Math.floor(brg/10)*10;
+      const distKm=gcDist(CY,CX,meta.lat,meta.lon);
+      if(!groups[slot])groups[slot]={totalQso:0,sizeQso:{}};
+      groups[slot].totalQso+=qsoCount;
+      const si=distToSizeIdx(distKm);
+      groups[slot].sizeQso[si]=(groups[slot].sizeQso[si]||0)+qsoCount;
+    }
+  }
+
+  // RBN圏外グリッドを方位角10°グループに集約（QSOとは別管理）
+  const rbnGroups={};
+  if(allRbnData&&document.getElementById('chk-rbn')?.checked){
+    const f=getFilters();
+    const rbnCount=queryRbn(f);
+    for(const[rx4,rbnCnt]of Object.entries(rbnCount)){
+      const meta=allRbnData.grids[rx4]||allData.grids[rx4];if(!meta)continue;
+      if(!isGridOffscreen(meta))continue;
+      const brg=bearingTo(meta.lat,meta.lon);
+      const slot=Math.floor(brg/10)*10;
+      const distKm=gcDist(CY,CX,meta.lat,meta.lon);
+      if(!rbnGroups[slot])rbnGroups[slot]={totalQso:0,sizeQso:{}};
+      rbnGroups[slot].totalQso+=rbnCnt;
+      const si=distToSizeIdx(distKm);
+      rbnGroups[slot].sizeQso[si]=(rbnGroups[slot].sizeQso[si]||0)+rbnCnt;
+    }
+  }
+
+  // 三角リストを構築
+  // QSO: 外側リング、RBN: 内側リング
+  // offsetの代わりにdistPx（外周からの内向きpx距離）で管理し重なりを防ぐ
+  const RBN_GAP=20;  // QSO群とRBN群の間隔(px)
+  const arrows=[];
+
+  // QSO三角を構築し、方位角スロットごとの使用済みpx幅を記録
+  const qsoUsedPx={};  // slot → QSOが使った内向き距離(px)
+  function buildQsoArrows(grps){
+    for(const[slotStr,g]of Object.entries(grps)){
+      const brgDeg=+slotStr+5;
+      const sizeEntries=Object.entries(g.sizeQso)
+        .map(([si,q])=>({si:+si,q}))
+        .sort((a,b)=>a.si-b.si);
+      let usedPx=0;
+      for(const{si,q}of sizeEntries){
+        const sizePx=ARROW_SIZES[Math.min(si,ARROW_SIZES.length-1)];
+        const step=sizePx*1.2;
+        const n=Math.min(10,Math.floor(Math.log2(q))+1);
+        for(let k=0;k<n;k++){
+          arrows.push({brgDeg,sizeIdx:si,distPx:usedPx,color:'rgba(255,255,255,0.9)',isRbn:false});
+          usedPx+=step;
+        }
+      }
+      qsoUsedPx[slotStr]=usedPx;
+    }
+  }
+
+  // RBN三角を構築（QSO使用px + GAP の位置から開始）
+  function buildRbnArrows(grps){
+    for(const[slotStr,g]of Object.entries(grps)){
+      const brgDeg=+slotStr+5;
+      const sizeEntries=Object.entries(g.sizeQso)
+        .map(([si,q])=>({si:+si,q}))
+        .sort((a,b)=>a.si-b.si);
+      // QSOがある方位スロットはその内側+GAP、ない場合はQSOと同じ外周端から
+      const qsoUsed=qsoUsedPx[slotStr];
+      const startPx=qsoUsed!=null ? qsoUsed+RBN_GAP : 0;
+      let usedPx=startPx;
+      for(const{si,q}of sizeEntries){
+        const sizePx=ARROW_SIZES[Math.min(si,ARROW_SIZES.length-1)];
+        const step=sizePx*1.2;
+        const n=Math.min(10,Math.floor(Math.log2(q))+1);
+        for(let k=0;k<n;k++){
+          arrows.push({brgDeg,sizeIdx:si,distPx:usedPx,color:'rgba(220,0,220,0.9)',isRbn:true});
+          usedPx+=step;
+        }
+      }
+    }
+  }
+
+  buildQsoArrows(groups);
+  buildRbnArrows(rbnGroups);
+
+  _arrowCache=arrows;
+  _startArrowBlink(arrows);
+}
+
+function _startArrowBlink(arrows){
+  const gen=++_arrowBlink.gen;
+  if(_arrowBlink.raf){cancelAnimationFrame(_arrowBlink.raf);_arrowBlink.raf=null;}
+  if(!arrows||arrows.length===0)return;
+
+  // 各三角のalphaを独立管理
+  const N=arrows.length;
+  const alphas=new Float32Array(N).fill(1.0);
+  const phases=new Float32Array(N); // 0〜1の位相オフセット
+  const DELAY=200; // ms遅延間隔
+  const PERIOD=1200; // 1周期ms
+  const startTs=performance.now();
+  // distPx=0(外側)が最初、distPxが大きい(内側)ほど遅延
+  for(let i=0;i<N;i++) phases[i]=(Math.round(arrows[i].distPx/10)*DELAY)%PERIOD/PERIOD;
+
+  function loop(ts){
+    if(_arrowBlink.gen!==gen)return;
+    const elapsed=(ts-startTs)/PERIOD;
+    for(let i=0;i<N;i++){
+      const phase=((elapsed+phases[i])%1+1)%1;
+      alphas[i]=0.15+0.85*((1-Math.cos(phase*Math.PI*2))/2);
+    }
+    _arrowBlink.alphas=alphas; // _redrawCellsOnlyから参照できるよう保存
+    _drawArrowsOnCanvas(arrows,alphas);
+    _arrowBlink.raf=requestAnimationFrame(loop);
+  }
+  _arrowBlink.raf=requestAnimationFrame(loop);
+}
+
+function _drawArrowsOnCanvas(arrows,alphas){
+  if(!arrows||arrows.length===0)return;
+  const cx2=SZ/2,cy2=SZ/2,R=SZ/2-4;
+  c2.save();
+  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);c2.clip();
+  for(let i=0;i<arrows.length;i++){
+    const{brgDeg,sizeIdx,distPx,color}=arrows[i];
+    const sizePx=ARROW_SIZES[Math.min(sizeIdx,ARROW_SIZES.length-1)];
+    const brgRad=brgDeg*Math.PI/180;
+    const EDGE=18;
+    const dist=R - EDGE - distPx;
+    if(dist<10)continue;
+    const px2=cx2+dist*Math.sin(brgRad);
+    const py2=cy2-dist*Math.cos(brgRad);
+    const tip=sizePx, half=sizePx*0.55;
+    c2.save();
+    c2.translate(px2,py2);
+    c2.rotate(brgRad);
+    c2.globalAlpha=alphas?alphas[i]:0.8;
+    c2.beginPath();
+    c2.moveTo(0,-tip);
+    c2.lineTo(-half, tip);
+    c2.lineTo( half, tip);
+    c2.closePath();
+    c2.strokeStyle=color||'rgba(255,255,255,0.9)';
+    c2.lineWidth=1.2;
+    c2.stroke();
+    c2.restore();
+  }
+  c2.restore();
+}
+
+// Cycle行の有効/無効切り替え
+function setCycleRowEnabled(enabled){
+  const row=document.getElementById('row-cycle');
+  if(!row)return;
+  row.style.opacity=enabled?'':'0.35';
+  row.style.pointerEvents=enabled?'':'none';
+}
+
+// ---- バンド/モード表示 ---------------------------------------------------
+function updateBandModeDisplay(){
+  const bv=+document.getElementById('sel-band').value;
+  const mv=+document.getElementById('sel-mode').value;
+  const bName=bv?BAND_NAMES[bv]:'All';
+  const mName=mv?(['','CW','SSB','DIGI'][mv]):'All';
+  const bColor=bv?BAND_COLORS[bv]:'#fff';
+  // モード色: CW=水色、SSB=薄黄、All=白
+  const mColor=mv===1?'#44ccff':mv===2?'#ffdd88':'#fff';
+  const el=document.getElementById('ov-bandmode');
+  el.innerHTML=`<span style="color:${bColor}">${bName}</span> <span style="color:${mColor}">${mName}</span>`;
+}
+
+// ---- ロケータホバーツールチップ ------------------------------------------
+// rxCountPerYear: {rx4: {year: count, ...}, ...} — drawMapで更新
+let _rxCountPerYear={};
+let _hoverTooltipTimeout=null;
+
+cv.addEventListener('mousemove',e=>{
+  if(isDragging)return;
+  const rect=cv.getBoundingClientRect();
+  const px=(e.clientX-rect.left)*(SZ/rect.width);
+  const py=(e.clientY-rect.top)*(SZ/rect.height);
+  const tip=document.getElementById('grid-tooltip');
+
+  if(!_blinkCellCache||!allData){tip.style.display='none';return;}
+  const{grids,entries}=_blinkCellCache;
+
+  // セルヒット判定ヘルパー
+  function hitTest(meta){
+    const pt=proj([meta.lon,meta.lat]);if(!pt)return false;
+    const pe=proj([meta.lon+2,meta.lat]);
+    const pn=proj([meta.lon,meta.lat+1]);
+    if(!pe||!pn)return false;
+    const szX=Math.abs(pe[0]-pt[0]);
+    const szY=Math.abs(pn[1]-pt[1]);
+    return Math.abs(px-pt[0])<szX&&Math.abs(py-pt[1])<szY;
+  }
+
+  let found=null;
+  let foundIsRbnOnly=false;
+
+  // QSOパネルを検索（最前面優先）
+  for(const[rx4]of [...entries].reverse()){
+    const meta=grids[rx4];if(!meta)continue;
+    if(hitTest(meta)){found=rx4;break;}
+  }
+
+  // QSOパネルにヒットしなかった場合、RBN専用パネルを検索
+  if(!found&&_blinkCellCache.rbnEnabled&&_blinkCellCache.rbnCount){
+    const{rbnCount,rbnGrids}=_blinkCellCache;
+    const mergedRbnGrids=Object.assign({},grids,rbnGrids);
+    for(const rx4 of Object.keys(rbnCount)){
+      if(rx4 in (_blinkCellCache.rxCount||{}))continue; // QSOパネルは除外済み
+      const meta=mergedRbnGrids[rx4];if(!meta)continue;
+      if(hitTest(meta)){found=rx4;foundIsRbnOnly=true;break;}
+    }
+  }
+
+  if(!found){tip.style.display='none';return;}
+
+  // ツールチップ内容構築: グリッド名 + 年別QSO数 + RBN数
+  const yearData=_rxCountPerYear[found]||{};
+  const years=Object.keys(yearData).sort();
+  let html=`<b>${found}</b>`;
+  if(years.length>0){
+    html+='<br>'+years.map(y=>`${y}: ${yearData[y]} QSO`).join('<br>');
+  }
+  // RBN数（RBNデータがある場合）
+  if(allRbnData&&document.getElementById('chk-rbn')?.checked){
+    const f=getFilters();
+    const rbnC=queryRbn(f);
+    const rbnN=rbnC[found];
+    if(rbnN) html+=`<br><span style="color:#cc44cc">RBN: ${rbnN}</span>`;
+  }
+  tip.innerHTML=html;
+  tip.style.display='block';
+  const mapRect=cv.parentElement.getBoundingClientRect();
+  let tx=e.clientX-mapRect.left+12;
+  let ty=e.clientY-mapRect.top-10;
+  tip.style.left=tx+'px';
+  tip.style.top=ty+'px';
+});
+cv.addEventListener('mouseleave',()=>{
+  document.getElementById('grid-tooltip').style.display='none';
+});
+
+// cvクリック: 三角インジケーターをクリックしたらその方向のパネルが見えるよう縮小
+cv.addEventListener('click',e=>{
+  if(isDragging)return;
+  const rect=cv.getBoundingClientRect();
+  const px=(e.clientX-rect.left)*(SZ/rect.width);
+  const py=(e.clientY-rect.top)*(SZ/rect.height);
+  const cx2=SZ/2,cy2=SZ/2,R=SZ/2-4;
+
+  if(!_arrowCache||_arrowCache.length===0)return;
+  for(const arrow of _arrowCache){
+    const{brgDeg,sizeIdx,distPx}=arrow;
+    const sizePx=ARROW_SIZES[Math.min(sizeIdx,ARROW_SIZES.length-1)];
+    const brgRad=brgDeg*Math.PI/180;
+    const EDGE=18;
+    const dist=R-EDGE-distPx;
+    if(dist<10)continue;
+    const ax=cx2+dist*Math.sin(brgRad);
+    const ay=cy2-dist*Math.cos(brgRad);
+    const hitR=sizePx*1.4;
+    if((px-ax)**2+(py-ay)**2<=hitR*hitR){
+      const isRbn=arrow.isRbn===true;
+      _zoomToArrowDirection(brgDeg, isRbn);
+      return;
+    }
+  }
+});
+
+function _zoomToArrowDirection(brgDeg, isRbn=false){
+  if(!allData||!_arrowCache)return;
+  const f=getFilters();
+  let maxDist=0;
+
+  if(isRbn&&allRbnData){
+    // RBN三角: queryRbnの結果から圏外グリッドの最遠を探す
+    const rbnCount=queryRbn(f);
+    for(const[rx4]of Object.entries(rbnCount)){
+      const meta=allRbnData.grids[rx4]||allData.grids[rx4];if(!meta)continue;
+      if(!isGridOffscreen(meta))continue;
+      const brg=bearingTo(meta.lat,meta.lon);
+      let diff=((brg-brgDeg)+360)%360;
+      if(diff>180)diff=360-diff;
+      if(diff>15)continue;
+      const d=gcDist(CY,CX,meta.lat,meta.lon);
+      if(d>maxDist)maxDist=d;
+    }
+  } else {
+    // QSO三角: queryHeatmapの結果から圏外グリッドの最遠を探す
+    const rxCount=queryHeatmap(f);
+    for(const[rx4]of Object.entries(rxCount)){
+      const meta=allData.grids[rx4];if(!meta)continue;
+      if(!isGridOffscreen(meta))continue;
+      const brg=bearingTo(meta.lat,meta.lon);
+      let diff=((brg-brgDeg)+360)%360;
+      if(diff>180)diff=360-diff;
+      if(diff>15)continue;
+      const d=gcDist(CY,CX,meta.lat,meta.lon);
+      if(d>maxDist)maxDist=d;
+    }
+  }
+
+  if(maxDist===0)return;
+  const newRadius=Math.min(SCALE_MAX,maxDist*1.2);
+  radiusKm=sliderIdxToRadius(radiusToSliderIdx(newRadius));
+  _offscreen=null;_offscreenKey=null;
+  Object.keys(_chartBg).forEach(k=>delete _chartBg[k]);
+  drawMap();
+}
+
+// ---- デフォルト設定の保存・復元 ------------------------------------------
+const LS_KEY='heatmap_defaults';
+
+function saveDefaults(){
+  const d={
+    dist:     document.getElementById('sld-lon').value,
+    center:   document.getElementById('inp-grid').value,
+    fixed:    document.getElementById('chk-fixed').checked,
+    band:     document.getElementById('sel-band').value,
+    mode:     document.getElementById('sel-mode').value,
+    power:    document.getElementById('sel-power').value,
+    contest:  document.getElementById('sel-contest').value,
+    years:    getSelectedYears(),
+    crawl:    document.querySelector('input[name="rt-cycle"]:checked')?.value??'none',
+    crawlTimer: document.querySelector('input[name="rt-crawl-timer"]:checked')?.value??'5',
+    radiusKm: radiusKm,
+    bright:   document.getElementById('sld-bright').value,
+    rbn:      document.getElementById('chk-rbn').checked,
+  };
+  try{localStorage.setItem(LS_KEY,JSON.stringify(d));}catch(e){}
+  const btn=document.getElementById('btn-setdefault');
+  btn.style.borderColor='#4af'; btn.style.color='#4af';
+  setTimeout(()=>{btn.style.borderColor='';btn.style.color='';},800);
+}
+
+function applyDefaults(){
+  let d;
+  try{d=JSON.parse(localStorage.getItem(LS_KEY)||'null');}catch(e){d=null;}
+  if(!d)return false;
+  if(d.dist!==undefined){
+    document.getElementById('sld-lon').value=d.dist;
+    document.getElementById('lbl-lon').textContent=d.dist+'km';
+  }
+  if(d.center){
+    document.getElementById('inp-grid').value=d.center;
+    const c=parseGrid(d.center);
+    if(c){CY=c[0];CX=c[1];QX=CX;QY=CY;}
+  }
+  if(d.fixed!==undefined) document.getElementById('chk-fixed').checked=d.fixed;
+  if(d.band!==undefined)  document.getElementById('sel-band').value=d.band;
+  if(d.mode!==undefined)  document.getElementById('sel-mode').value=d.mode;
+  if(d.power!==undefined) document.getElementById('sel-power').value=d.power;
+  if(d.contest!==undefined) document.getElementById('sel-contest').value=d.contest;
+  if(d.radiusKm!==undefined) radiusKm=+d.radiusKm;
+  if(d.bright!==undefined){
+    document.getElementById('sld-bright').value=d.bright;
+    document.getElementById('lbl-bright').textContent=d.bright+'%';
+  }
+  if(d.crawl){
+    const r=document.querySelector(`input[name="rt-cycle"][value="${d.crawl}"]`);
+    if(r)r.checked=true;
+  }
+  if(d.crawlTimer){
+    const r=document.querySelector(`input[name="rt-crawl-timer"][value="${d.crawlTimer}"]`);
+    if(r)r.checked=true;
+  }
+  if(d.rbn!==undefined) document.getElementById('chk-rbn').checked=d.rbn;
+  // Year: contestパネルを先に再構築してからチェックを反映
+  if(d.years&&d.years.length>0){
+    updateYearPanel(); // contestに合わせたパネルを構築
+    document.querySelectorAll('#year-panel input[type=checkbox]').forEach(cb=>{
+      cb.checked=d.years.includes(+cb.value);
+    });
+  }
+  updateBandModeDisplay();
+  return true;
+}
+
+document.getElementById('btn-setdefault').addEventListener('click',saveDefaults);
+
+// overlay-infoクリック → 表示範囲(Radius)をデフォルトに戻す
+document.getElementById('overlay-info').addEventListener('click',()=>{
+  let defaultRadius=SCALE_DEFAULT;
+  try{
+    const d=JSON.parse(localStorage.getItem(LS_KEY)||'null');
+    if(d&&d.radiusKm) defaultRadius=+d.radiusKm;
+  }catch(e){}
+  radiusKm=defaultRadius;
+  _offscreen=null;_offscreenKey=null;
+  drawMap();
+});
+
+// ---- 初期化 ------------------------------------------------------------
+async function init(){
+  updateInpHour(0);
+  document.getElementById('status').textContent='Loading world map…';
+  const topo=await loadJSON(['./countries-50m.json',
+    'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json']);
+  if(topo)worldFeatures=topojson.feature(topo,topo.objects.countries);
+  buildBandLegend();
+  updateYearPanel();
+  // data-tip-key → data-tip を言語に応じて展開
+  document.querySelectorAll('[data-tip-key]').forEach(el=>{
+    el.dataset.tip=t(el.dataset.tipKey);
+  });
+  // 凡例バー描画（heatColor関数と連動）
+  drawLegendBar('grad-bar-qso', heatColor);
+  // デフォルト設定を復元
+  applyDefaults();
+  applyContestConstraints();
+  _setupChartHover('wrap-qsos',      'bg-qsos',      'qso');
+  _setupChartHover('wrap-grids',     'bg-grids',     'grids');
+  _setupChartHover('wrap-rbn-spots', 'bg-rbn-spots', 'qso',   'Spots');
+  _setupChartHover('wrap-rbn-grids', 'bg-rbn-grids', 'grids', 'Grids');
+  await loadData();
+}
+
+// ---- データ読み込み・マージ ----------------------------------------------
+async function loadData(){
+  const contest=document.getElementById('sel-contest').value;
+  const years=getSelectedYears();
+  // 全キャッシュ・状態クリア
+  stopAll();
+  if(_blinkRaf){cancelAnimationFrame(_blinkRaf);_blinkRaf=null;}
+  _blinkGen++;
+  _blinkLastTs=null;
+  _offscreen=null; _offscreenKey=null;
+  Object.keys(_chartBg).forEach(k=>delete _chartBg[k]);
+  _stepIndex=null;
+  _blinkCellCache=null;
+  _rxCountPerYear={};
+  allData=null;
+  _blinkAlpha=1.0;
+  _skipCharts=false;
+  _wheelPending=false;
+  clearTimeout(_chartDebounce);_chartDebounce=null;
+  c2.clearRect(0,0,cv.width,cv.height);
+  updateBandModeDisplay();
+
+  if(years.length===0){
+    document.getElementById('status').textContent=isJa?'年を選択してください':'Please select a year';
+    drawMap();
+    _blinkRaf=requestAnimationFrame(ts=>_blinkLoop(ts,_blinkGen));
+    return;
+  }
+
+  document.getElementById('status').textContent='Loading QSO data…';
+  const sld=document.getElementById('sld-hour');
+  sld.value=0;
+  updateInpHour(0);
+
+  // 複数年のJSONを並列ロード
+  const results=await Promise.all(years.map(y=>
+    loadJSON([`./data/${contest}_${y}.json`]).then(d=>({year:y,data:d}))
+  ));
+  const loaded=results.filter(r=>r.data);
+  if(loaded.length===0){
+    document.getElementById('status').textContent=isJa?'Error: データが見つかりません':'Error: Data not found';
+    drawMap();
+    _blinkRaf=requestAnimationFrame(ts=>_blinkLoop(ts,_blinkGen));
+    return;
+  }
+
+  // マージ: 最初のmetaを基準にする
+  const base=loaded[0].data;
+  const resMin=base.meta?.time_resolution_min??60;
+  const stepsPerDay=base.meta?.steps_per_day??24;
+
+  // gridsをマージ（全年分のグリッドを統合）
+  const mergedGrids={...base.grids};
+  for(const{data}of loaded.slice(1)){
+    if(data.grids)Object.assign(mergedGrids,data.grids);
+  }
+
+  // recordsをマージ: rec[7]に年を付加（rec[6]=power_codeを保持）
+  const mergedRecords=[];
+  const maxCountPerCell={};
+  for(const{year,data}of loaded){
+    if(!data.records)continue;
+    for(const rec of data.records){
+      // 新フォーマット rec: [rx4, band, mode, t_step, tx4, count, power_code]
+      // マージ後:        [rx4, band, mode, t_step, tx4, count, power_code, year]
+      const r=[rec[0],rec[1],rec[2],rec[3],rec[4],rec[5],rec[6]??0,year];
+      mergedRecords.push(r);
+      if(!maxCountPerCell[rec[0]]||rec[5]>maxCountPerCell[rec[0]])
+        maxCountPerCell[rec[0]]=rec[5];
+    }
+  }
+
+  allData={
+    meta:{...base.meta, merged_years:years},
+    grids:mergedGrids,
+    records:mergedRecords,
+    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell))
+  };
+
+  {
+    const cfg_load=contestCfg();
+    const totalSteps_load=cfg_load.hours===48 ? stepsPerDay*2 : stepsPerDay;
+    sld.max=totalSteps_load-1;
+    sld.style.width=(cfg_load.hours===48?'320px':'160px');
+    // +1dチェックボックスの表示切替
+    const plus1d=document.getElementById('utc-plus1d');
+    if(plus1d) plus1d.style.display=(cfg_load.hours===48?'':'none');
+
+    // _stepIndexを構築（48h=288ステップ、24h=144ステップ）
+    // 24h: utc_day=1のレコードはt_step>=stepsPerDayになることがあるのでmodulo正規化
+    const totalSteps_idx=totalSteps_load;
+    _stepIndex=Array.from({length:totalSteps_idx},()=>[]);
+    for(const rec of allData.records){
+      const s=cfg_load.hours===48 ? rec[3] : ((rec[3]%stepsPerDay)+stepsPerDay)%stepsPerDay;
+      if(s>=0&&s<totalSteps_idx) _stepIndex[s].push(rec);
+    }
+  }
+  updateInpHour(0);
+
+  const yStr=years.length===1?years[0]:`${years.join('+')}`;
+  document.getElementById('status').textContent=
+    `${mergedRecords.length.toLocaleString()} records (${yStr})`;
+
+  // RBNデータ読み込み（チェックがあれば）
+  await loadRbnData(contest, years);
+
+  drawMap();
+  _blinkRaf=requestAnimationFrame(ts=>_blinkLoop(ts,_blinkGen));
+}
+async function loadRbnData(contest, years){
+  allRbnData=null; _rbnStepIndex=null;
+  document.getElementById('rbn-legend-row').style.display='none';
+  ['box-rbn-spots','box-rbn-grids'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  if(!document.getElementById('chk-rbn')?.checked)return;
+
+  // 年ごとにRBN JSONを並列ロード
+  const results=await Promise.all(years.map(y=>
+    loadJSON([`./data/${contest}_${y}_rbn.json`]).then(d=>({year:y,data:d}))
+  ));
+  const loaded=results.filter(r=>r.data);
+  if(loaded.length===0)return;
+
+  const base=loaded[0].data;
+  const resMin=base.meta?.time_resolution_min??60;
+  const stepsPerDay=base.meta?.steps_per_day??24;
+  const mergedGrids={...base.grids};
+  const mergedRecords=[];
+  const maxCountPerCell={};
+  for(const{year,data}of loaded){
+    if(!data.records)continue;
+    Object.assign(mergedGrids, data.grids||{});
+    for(const rec of data.records){
+      const r=[rec[0],rec[1],rec[2],rec[3],rec[4],rec[5],rec[6]??0,year];
+      mergedRecords.push(r);
+      if(!maxCountPerCell[rec[0]]||rec[5]>maxCountPerCell[rec[0]])
+        maxCountPerCell[rec[0]]=rec[5];
+    }
+  }
+  allRbnData={
+    meta:{...base.meta},
+    grids:mergedGrids,
+    records:mergedRecords,
+    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell))
+  };
+
+  // RBNのt_stepをQSOデータの時間解像度に合わせて変換
+  // step4_rbnとstep5_rbnを --time-resolution 10 で実行した場合は変換不要
+  // 異なる解像度の場合はt_stepをスケール変換（1対1マッピング、展開はしない）
+  const qsoResMin=allData?.meta?.time_resolution_min??60;
+  const rbnResMin=base.meta?.time_resolution_min??60;
+  const qsoStepsPerDay=allData?.meta?.steps_per_day??24;
+  const cfg_rbn=contestCfg();
+  const rbnTotalSteps=cfg_rbn.hours===48 ? qsoStepsPerDay*2 : qsoStepsPerDay;
+  if(qsoResMin!==rbnResMin){
+    console.warn(`RBN解像度(${rbnResMin}min)とQSO解像度(${qsoResMin}min)が異なります。`
+      +` step4_rbn.py と step5_rbn.py を --time-resolution ${qsoResMin} で再実行してください。`);
+    // 暫定: t_stepをスケール変換（精度は落ちる）
+    for(const rec of allRbnData.records){
+      const utcMin=rec[3]*rbnResMin;
+      rec[3]=Math.floor(utcMin/qsoResMin);  // 48h対応: %は除去
+    }
+  }
+
+  _rbnStepIndex=Array.from({length:rbnTotalSteps},()=>[]);
+  for(const rec of allRbnData.records){
+    // 24h: t_stepはutc_dayベースで144以上になることがあるのでmodulo正規化
+    const s=cfg_rbn.hours===48 ? rec[3] : ((rec[3]%qsoStepsPerDay)+qsoStepsPerDay)%qsoStepsPerDay;
+    if(s>=0&&s<rbnTotalSteps) _rbnStepIndex[s].push(rec);
+  }
+  document.getElementById('rbn-legend-row').style.display='';
+  ['box-rbn-spots','box-rbn-grids'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='';});
+  drawLegendBar('grad-bar-rbn', rbnColor);
+}
+
+document.getElementById('chk-rbn')?.addEventListener('change',()=>{
+  const contest=document.getElementById('sel-contest').value;
+  const years=getSelectedYears();
+  loadRbnData(contest,years).then(()=>drawMap());
+});
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PropMap ユーザーガイド</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: #d4d4d4;
+  background: #1a1a1a;
+  max-width: 100%;
+  margin: 0;
+  padding: 32px 48px 80px;
+}
+h1 { font-size: 1.9em; border-bottom: 2px solid #444; padding-bottom: 0.35em; margin: 0.6em 0 0.8em; color: #e8e8e8; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #333; padding-bottom: 0.25em; margin: 2.2em 0 0.8em; color: #e0e0e0; }
+h3 { font-size: 1.1em; margin: 1.6em 0 0.5em; color: #d8d8d8; }
+h4 { font-size: 1em; margin: 1.2em 0 0.4em; color: #cccccc; }
+p { margin: 0.7em 0; }
+ul, ol { padding-left: 1.6em; margin: 0.6em 0; }
+li { margin: 0.3em 0; }
+a { color: #7ab3e0; text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 600; color: #e8e8e8; }
+code {
+  font-family: 'SF Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+  font-size: 0.875em;
+  background: #2a2a2a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #e06c75;
+}
+pre {
+  background: #242424;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+  position: relative;
+  width: fit-content;
+  min-width: 20em;
+}
+pre code {
+  background: none;
+  padding: 0;
+  color: #d4d4d4;
+  font-size: 0.875em;
+  line-height: 1.5;
+}
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #aaa;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+pre:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { background: #333; }
+.copy-btn.copied { background: #28a745; color: #fff; border-color: #28a745; opacity: 1; }
+table {
+  border-collapse: collapse;
+  width: auto;
+  max-width: 100%;
+  margin: 1em 0;
+  font-size: 0.92em;
+}
+th, td { border: 1px solid #3a3a3a; padding: 8px 14px; text-align: left; }
+th { background: #2a2a2a; font-weight: 600; color: #e0e0e0; }
+tr:nth-child(even) td { background: #222; }
+blockquote {
+  border-left: 4px solid #555;
+  margin: 1em 0;
+  padding: 0.6em 1.2em;
+  color: #aaa;
+  background: #242424;
+  border-radius: 0 4px 4px 0;
+}
+blockquote p { margin: 0; }
+hr { border: none; border-top: 1px solid #333; margin: 2em 0; }
+img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radius: 4px; }
+@media (max-width: 640px) {
+  body { padding: 16px 18px 60px; }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.25em; }
+}
+</style>
+</head>
+<body>
+<h1 id="propmap">PropMap ユーザーガイド</h1>
+<hr />
+<h2 id="1">1. はじめに</h2>
+<h3 id="propmap_1">PropMapとは</h3>
+<p>PropMapは、アマチュア無線コンテストの公開ログデータおよび RBN（Reverse Beacon Network）スポットデータを集約し、指定したグリッドロケーターを中心とした大圏方位図（Azimuthal Equidistant Map）上に、過去の HF 帯の電波伝搬状況をヒートマップとして可視化するツール。過去のデータをベースとしていて、同時期のコンテストでの電波伝播状況の傾向の把握に有用。過去データの再生そして、実時間に過去データの時間を合わせることでリアルタイムでの同時刻の過去データの参照が可能</p>
+<p>コンテスト参加時の運用計画、バンドチェンジのタイミング把握、過去コンテストの伝搬傾向分析、リアルタイム参照が可能</p>
+<h3 id="_1">動作環境・必要なもの</h3>
+<ul>
+<li>macOS Tahoe / Windows 11（動作確認済み）</li>
+<li>Python 3（インストール手順は「<a href="#python-3-のインストール">Python 3 のインストール</a>」参照）</li>
+<li>モダンブラウザ（Safari、Chrome、Edge 等）</li>
+<li>参照したいコンテストの JSON データファイル（<code>~/heatmap/data/</code> に配置済みのこと）。<a href="#10-事前データ準備">事前データ準備の章を参照してのデータの作成が必要</a></li>
+</ul>
+<h3 id="_2">前提条件</h3>
+<ul>
+<li>参照したいコンテストの公開ログの取得</li>
+<li>公開ログのヘッダ(<strong>GRID-LOCATOR</strong>)での正しいグリッドロケータの記載(4桁あれば必要十分)</li>
+<li>コールサインからグリッドロケータの推定は現状で未実施</li>
+<li>関連する RBN の生データ(RBN から参照する場合)</li>
+<li>RBN で使用するモードは CW のみ</li>
+<li>RBN で使用する spot は公開ログのうちグリッドロケータが記載された局のみ</li>
+<li>公開ログ間での QSO のクロスチェックに合致し、双方の局のグリッドロケータが判明している QSO のみデータとして採用</li>
+<li>クロスチェックは双方のログに相手局が同一バンド、同一時刻(時間差は 15 分以内)に載っていることとし、ナンバーの整合性は不問</li>
+<li>クロスチェックでのコールサインは完全合致あるいは 2 文字以内の不一致なら合致とみなす</li>
+<li>バンド不一致の場合、それぞれの局のログ時刻から 15 分以内での当該バンドでの QSO 数の多い方を正しいバンドとみなしてバンド訂正する</li>
+</ul>
+<hr />
+<h2 id="2">2. セットアップ</h2>
+<h3 id="python-3">Python 3 のインストール</h3>
+<h4 id="macos-tahoe">macOS Tahoe</h4>
+<p>macOS には OS 自体に Python 3 が付属しているが、OS アップデートで置き換わるリスクや <code>pip</code> の利用しづらさがあるため、Homebrew 経由のインストールを推奨する。データ処理スクリプトで追加パッケージが必要になった場合も Homebrew Python であれば <code>pip</code> で容易に対応可能</p>
+<ol>
+<li>Homebrew のインストール（未導入の場合）：</li>
+</ol>
+<pre><code class="language-bash">/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;
+</code></pre>
+<ol>
+<li>Python 3 のインストール：</li>
+</ol>
+<pre><code class="language-bash">brew install python3
+</code></pre>
+<ol>
+<li>インストール確認：</li>
+</ol>
+<pre><code class="language-bash">python3 --version
+</code></pre>
+<h4 id="windows-11-wsl2">Windows 11 — WSL2 なし</h4>
+<p>ビューワーの利用からデータ構築まで、Python for Windows と付属の <code>generate_all.bat</code> にて対応。<code>generate_all.sh</code> は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う <code>generate_all.bat</code> を使用する</p>
+<ol>
+<li><a href="https://www.python.org/downloads/">python.org</a> から Windows 用インストーラを取得する</li>
+<li>インストール時に <strong>「Add Python to PATH」にチェックを入れる</strong>（デフォルトではオフのため必須）</li>
+<li>インストール確認（コマンドプロンプト）：</li>
+</ol>
+<pre><code>python --version
+</code></pre>
+<blockquote>
+<p><strong>注意:</strong> Windows では <code>python3</code> ではなく <code>python</code> コマンドを使用すること</p>
+</blockquote>
+<p>ファイルの配置先は <code>%USERPROFILE%\heatmap\</code>（例: <code>C:\Users\ユーザー名\heatmap\</code>）とする</p>
+<h4 id="windows-11-wsl2_1">Windows 11 — WSL2 あり</h4>
+<p>WSL2 環境ではシェルスクリプトをそのまま利用でき、macOS と同等の操作感で使用できる。WSL2 のセットアップ手順は <a href="https://learn.microsoft.com/ja-jp/windows/wsl/install">Microsoft 公式ドキュメント</a> を参照。Ubuntu インストール後、以下で Python 3 を導入する：</p>
+<pre><code class="language-bash">sudo apt update &amp;&amp; sudo apt install -y python3 python3-pip
+</code></pre>
+<p>以降の操作は macOS と同じ。ファイルの配置先は WSL2 のホームディレクトリ（<code>~/heatmap/</code>）とする。ブラウザは Windows 側で <code>http://localhost:8765</code> にアクセスする。</p>
+<hr />
+<h3 id="_3">ファイル構成</h3>
+<pre><code class="language-no-copy">~/heatmap/
+├── heatmap.html              メインアプリ（単一ファイル完結）
+├── start_heatmap.command     起動スクリプト（macOS用）
+├── start_heatmap.bat         起動スクリプト（Windows用）
+├── countries-50m.json        地形データ
+├── data/
+│   ├── {contest}_{year}.json         QSOデータ（10分解像度）
+│   └── {contest}_{year}_rbn.json     RBNデータ（10分解像度）
+└── contest_logs/
+    ├── raw/{contest}_{year}/*.txt     公開されたCabrilloログ
+    ├── csv/                           処理済みCSVファイル
+    ├── rbn/                           RBNデータ
+    ├── SN_m_tot_V2.0.txt              太陽黒点数データ（SILSO）
+    ├── *.py                           データ処理スクリプト群
+    ├── generate_all.sh                QSO/RBN一括再生成スクリプト（macOS/Linux用）
+    └── generate_all.bat               QSO/RBN一括再生成スクリプト（Windows用）
+</code></pre>
+<h3 id="_4">起動方法</h3>
+<p><strong>macOS / Windows (WSL2 あり)</strong></p>
+<p><code>start_heatmap.command</code> をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる</p>
+<pre><code class="language-bash">python3 -m http.server 8765 --directory ~/heatmap
+</code></pre>
+<p><strong>Windows (WSL2 なし)</strong></p>
+<p><code>start_heatmap.bat</code> をダブルクリックするか、コマンドプロンプトから以下を実行する</p>
+<pre><code>python -m http.server 8765 --directory %USERPROFILE%\heatmap
+</code></pre>
+<p>起動後、ブラウザで <code>http://localhost:8765</code> にアクセスする</p>
+<blockquote>
+<p><strong>注意:</strong> ローカルのファイルサーバーが必要であるため、<code>heatmap.html</code> をブラウザで直接開いても動作しない</p>
+</blockquote>
+<hr />
+<h2 id="3">3. 画面構成</h2>
+<p><img src="images/sc1.png" alt="全体画面" style="max-width:100%;width:1400px;"></p>
+<p>画面は大きく2つのエリアで構成される</p>
+<p><strong>大圏地図エリア（左側 または 上側）</strong>
+中心グリッドを起点とした大圏方位図にヒートマップを表示するエリア</p>
+<p><strong>コントロール＋グラフエリア（右側 または 下側）</strong>
+表示条件の設定と、±3 時間の QSO 数・グリッド数の時系列グラフを表示するエリア</p>
+<h3 id="_5">レスポンシブレイアウト</h3>
+<p>ウィンドウ幅に応じてレイアウトが自動的に切り替わる</p>
+<p>ブラウザウィンドウが広い場合（デスクトップ・ノートPC等）は大圏地図エリアとコントロール＋グラフエリアが横並び、狭い場合（タブレット縦向き・スマートフォン等、またはウィンドウを縮小した場合）は縦積みに自動切替。</p>
+<p><img src="images/sc2.png" alt="縦積みレイアウト" style="max-width:100%;width:550px;"></p>
+<p>縦積み時は地図幅がウィンドウ幅いっぱいに広がり、グラフ高さは地図高さの 2.2 倍を上限として表示</p>
+<hr />
+<h2 id="4">4. 基本操作</h2>
+<p><img src="images/sc3.png" alt="コントロールパネル" style="max-width:100%;width:700px;"></p>
+<h3 id="_6">中心グリッドと表示範囲の設定</h3>
+<p><strong>Center（中心グリッド）</strong>
+4文字のグリッドロケーター（例: PM52）を入力する。入力後、<strong>Apply</strong> ボタンをクリックするか Enter キーで反映される。あるいは大圏地図をドラッグして中心としたい地域を地図の中央に移動させ <strong>Apply</strong> ボタンをクリック</p>
+<p><strong>Dist（表示距離フィルター）</strong>
+スライダーで中心グリッドからの距離（km）を設定する。この距離以内に該当する局が存在する QSO・スポットのみが表示対象</p>
+<p><strong>Fixed チェックボックス</strong></p>
+<ul>
+<li><strong>チェックあり（デフォルト）</strong>: ドラッグしても地図の見た目だけが動き、ヒートマップは更新されない。Apply を押した時点でヒートマップが新しい中心に合わせて再描画される</li>
+<li><strong>チェックなし</strong>: ドラッグに合わせてヒートマップがリアルタイムに更新される。広い範囲をドラッグすると描画負荷が高くなる</li>
+</ul>
+<h3 id="_7">コンテスト・バンド・モード・パワーの選択</h3>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Band</td>
+<td>表示するバンドを選択（160m / 80m / 40m / 20m / 15m / 10m / All (バンド混合)）</td>
+</tr>
+<tr>
+<td>Mode</td>
+<td>表示するモードを選択（CW / SSB / All (モード混合)）</td>
+</tr>
+<tr>
+<td>Power</td>
+<td>フィルタリングするパワークラス（High / Low / QRP）</td>
+</tr>
+<tr>
+<td>Contest</td>
+<td>表示するコンテストを選択</td>
+</tr>
+</tbody>
+</table>
+<p>モード固定のコンテストではそのモード以外の選択は不可</p>
+<h3 id="_8">年の選択と複数年マージ</h3>
+<p><strong>Year</strong> の各チェックボックスで表示する年を選択。複数年を同時にチェックするとデータをマージして重ね合わせ表示する。複数年マージは過去の傾向を総合的に把握する際に有効。公開ログの古いものについてはグリッドロケータの情報がないものが多いためヒートマップに何も表示されないものについてはこのあたりの背景を理解しておくとよい</p>
+<p>画面右上に読み込んだレコード数と年が表示される（例: <code>1,916,313 records (2025)</code>、<code>1,052,123 records (2024+2025)</code>）</p>
+<h3 id="_9">時刻スライダーの操作</h3>
+<p>スライダーを左右にドラッグして表示時刻を変更する。UTC時刻が左側のテキストボックスに表示される。テキストボックスに直接時刻（例: <code>14:30</code>）を入力してフォーカスを外すあるいは Enter キーで入力するとスライダーがその時刻に移動する</p>
+<p>48時間コンテスト（CQ WW、CQ WPX）では <strong>+1d</strong> チェックボックスが表示される。チェックを入れると2日目（コンテスト開始から24時間後以降）の時刻に切り替わる</p>
+<h3 id="set-default-reset-apply">Set Default / Reset / Apply</h3>
+<table>
+<thead>
+<tr>
+<th>ボタン</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Set Default</strong></td>
+<td>現在の設定（中心グリッド、表示距離など）をデフォルトとして保存</td>
+</tr>
+<tr>
+<td><strong>Reset</strong></td>
+<td>設定をデフォルトに戻す</td>
+</tr>
+<tr>
+<td><strong>Apply</strong></td>
+<td>Center の変更を反映</td>
+</tr>
+<tr>
+<td><strong>Doc</strong></td>
+<td>操作ガイドをブラウザの言語設定に応じて別タブで開く（日本語または英語）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5">5. 表示モード</h2>
+<h3 id="_10">通常表示（スライダー手動操作）</h3>
+<p>スライダーを手動で動かして任意の時刻の伝搬状況を確認するモード。大圏地図に表示されるグリッドパネルとグラフは指定した時刻に連動して更新</p>
+<h3 id="play">Play（自動再生）</h3>
+<p><strong>▶ Play</strong> ボタンをクリックするとコンテスト開始時刻からスライダーが自動的に進み、伝搬の変化をアニメーションで確認可能。再生中は <strong>■ Stop</strong> ボタンで停止</p>
+<p>任意の時刻から再生が可能で、48時間コンテストでは <strong>+1d</strong> チェックを入れた状態で Play すると2日目から再生</p>
+<h3 id="rt">RT（リアルタイム）</h3>
+<p><strong>⏱ RT</strong> ボタンをクリックすると現在のUTC時刻に同期してデータを表示。コンテスト開催中に現時刻に同期させての伝搬状況が確認可能</p>
+<p>48時間コンテストでは <strong>+1d</strong> チェックボックスで1日目・2日目を切り替える。コンテスト実施週末の当日は自動的に正しい日に切り替わる</p>
+<hr />
+<h2 id="6">6. 大圏地図の見方</h2>
+<p><img src="images/sc4.png" alt="QSOヒートマップ" style="max-width:100%;width:960px;"></p>
+<h3 id="_11">大圏方位図とは</h3>
+<p>大圏方位図（Azimuthal Equidistant Map）は、中心グリッドからの距離と方位が正確に表現される地図投影法。中心から任意の点への直線が大圏（最短経路）を表す。同心円は中心からの距離（km）を示す。</p>
+<h3 id="qso">QSOヒートマップ</h3>
+<p>4文字グリッドロケータ単位で地図上に配置される色付き矩形を<strong>グリッドパネル</strong>と呼ぶ。局が存在するグリッドごとに選択した時刻付近のQSO数を集計してグリッドパネルの色で表示。</p>
+<ul>
+<li>色は <strong>低（緑）→ 黄 → オレンジ → 高（赤）</strong> のグラデーション</li>
+<li>画面左上の <strong>QSO</strong> カラースケールバーで色と数量の対応を確認可能</li>
+</ul>
+<h3 id="rbn">RBNヒートマップ</h3>
+<p>CW のモードがあるコンテストのみ表示可能。SSBコンテストに切り替えるとチェックボックスが自動で外れてグレーアウトされる。<strong>RBN</strong> チェックボックスをONにするとRBNスポットデータをマゼンタ系の色のグリッドパネルにて表示</p>
+<p><img src="images/sc5.png" alt="RBNヒートマップ" style="max-width:100%;width:960px;"></p>
+<ul>
+<li>色は <strong>低（暗紫）→ マゼンタ → 高（白）</strong> のグラデーション</li>
+<li>画面左上の <strong>RBN</strong> カラースケールバーで確認可能</li>
+</ul>
+<h3 id="_12">圏外グリッドの三角マーク</h3>
+<p>大圏地図の表示範囲（円）の外側に存在するグリッドは、円の外周上に三角マークとして方位角を示す形で表示。QSOデータは白系、RBNデータはマゼンタ系の三角で表示。同じ方位に複数のグリッドがある場合は少しずつずらして表示。三角マークは点滅</p>
+<h3 id="_13">グレーライン（明暗境界線）</h3>
+<p>現在時刻の太陽の明暗境界線をオレンジ色の帯で表示。グレーラインは伝搬状況（特に低いバンド）と密接な関係がある</p>
+<h3 id="_14">右下オーバーレイの見方</h3>
+<p><img src="images/sc6.png" alt="右下オーバーレイ" style="max-width:100%;width:162px;"></p>
+<p>右下オーバーレイには以下の情報が表示される</p>
+<pre><code class="language-no-copy">0/21 (  0.0%)        ← QSO: 圏外グリッド数/総グリッド数（割合）
+0/17 (  0%)          ← RBN: 圏外グリッド数/総グリッド数（割合）
+Center: PM52
+Radius: 20,000km
+21 grids · 24 QSOs   ← 表示中のグリッド数とQSO数
+17 grids · 23 spots  ← 表示中のRBNグリッド数とスポット数
+</code></pre>
+<p>大きいフォントの数値（分子）は<strong>表示範囲外のグリッド数</strong>を示す。数値が0でない場合は点滅することで円外にデータがあることを示す</p>
+<p>各行にマウスカーソルを重ねると詳細情報をツールチップにて表示。オーバーレイ全体をクリックすると表示範囲（Radius）をデフォルト値に戻す</p>
+<h3 id="_15">ツールチップ</h3>
+<p>大圏地図上のグリッドパネルにマウスカーソルを重ねると、そのグリッドの詳細情報がツールチップにて表示</p>
+<ul>
+<li><strong>グリッド名</strong>（太字）</li>
+<li>選択年ごとの QSO 数（例: <code>2024: 12 QSO</code>）。複数年選択時は年別に列挙</li>
+<li>RBN 有効時はスポット数をマゼンタ色で追加表示（例: <code>RBN: 5</code>）</li>
+</ul>
+<hr />
+<h2 id="7">7. グラフパネルの見方</h2>
+<p><img src="images/sc7.png" alt="グラフパネル" style="max-width:100%;width:700px;"></p>
+<p>グラフパネルには以下の4つのグラフを表示。いずれも<strong>現在表示時刻の±3時間</strong>の範囲が対象</p>
+<h3 id="qsos-3h">QSOs (±3h)</h3>
+<p>コンテストログをベースにした時刻ごとのQSO数をバンド別の折れ線グラフで表示。縦の点線が現在表示時刻となる</p>
+<h3 id="rbn-spots-3h">RBN Spots (±3h)</h3>
+<p>RBNスポットデータをベースにした時刻ごとのスポット数をバンド別の折れ線グラフにて表示</p>
+<h3 id="grids-3h">Grids (±3h)</h3>
+<p>コンテストログをベースにした時刻ごとのアクティブグリッド数（ユニークなグリッド数）をバンド別に表示</p>
+<h3 id="rbn-grids-3h">RBN Grids (±3h)</h3>
+<p>RBNスポットデータをベースにした時刻ごとのアクティブグリッド数をバンド別に表示</p>
+<h3 id="_16">バンド別カラー</h3>
+<table>
+<thead>
+<tr>
+<th>バンド</th>
+<th>色</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10m</td>
+<td>赤</td>
+</tr>
+<tr>
+<td>15m</td>
+<td>オレンジ</td>
+</tr>
+<tr>
+<td>20m</td>
+<td>青</td>
+</tr>
+<tr>
+<td>40m</td>
+<td>黄</td>
+</tr>
+<tr>
+<td>80m</td>
+<td>緑</td>
+</tr>
+<tr>
+<td>160m</td>
+<td>紫</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_17">ツールチップ</h3>
+<p>グラフ上にマウスカーソルを重ねるとその時刻のバンド別数値がツールチップにて表示</p>
+<hr />
+<h2 id="8-crawl">8. Crawlモード（バンド自動巡回）</h2>
+<p><img src="images/sc8.png" alt="Crawlモード" style="max-width:100%;width:1400px;"></p>
+<p><a href="#rtリアルタイム">RT（リアルタイム）</a>表示中に設定した時間間隔で表示バンドを自動的に切り替えることで巡回させるモード</p>
+<h3 id="auto-all-no">Auto / All / No の違い</h3>
+<table>
+<thead>
+<tr>
+<th>設定</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Auto</strong></td>
+<td>現在時刻のデータから、中心グリッド周辺に届いているQSOが全体の15%以上を占めるバンドのみ多い順に巡回。アクティブなバンドに絞った効率的な確認が可能</td>
+</tr>
+<tr>
+<td><strong>All</strong></td>
+<td>全バンド（10m / 15m / 20m / 40m / 80m / 160m）を順番に巡回</td>
+</tr>
+<tr>
+<td><strong>No</strong></td>
+<td>自動巡回せず、バンドとモードは固定のまま</td>
+</tr>
+</tbody>
+</table>
+<p>モード固定のコンテスト（CW専用・SSB専用）では、Crawlの巡回対象もそのモードのみとなり、他のモードには切り替わらない</p>
+<h3 id="_18">巡回タイマーの設定</h3>
+<p><strong>Crawl Timer</strong> で各バンドの表示時間を選択する（5秒 / 10秒 / 15秒）</p>
+<hr />
+<h2 id="9">9. データについて</h2>
+<h3 id="_19">対応コンテストと収録期間</h3>
+<table>
+<thead>
+<tr>
+<th>コンテスト</th>
+<th>開催時期</th>
+<th>時間</th>
+<th>RBNデータ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IARU HF</td>
+<td>7月第2 full weekend（土曜 12Z 開始）</td>
+<td>24時間</td>
+<td>あり</td>
+</tr>
+<tr>
+<td>CQ WW CW</td>
+<td>11月最終 full weekend（土曜 00Z 開始）</td>
+<td>48時間</td>
+<td>あり</td>
+</tr>
+<tr>
+<td>CQ WW SSB</td>
+<td>10月最終 full weekend（土曜 00Z 開始）</td>
+<td>48時間</td>
+<td>なし</td>
+</tr>
+<tr>
+<td>CQ WPX CW</td>
+<td>5月最終 full weekend（土曜 00Z 開始）</td>
+<td>48時間</td>
+<td>あり</td>
+</tr>
+<tr>
+<td>CQ WPX SSB</td>
+<td>3月最終 full weekend（土曜 00Z 開始）</td>
+<td>48時間</td>
+<td>なし</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rbn_1">RBNデータについて</h3>
+<p>RBN（Reverse Beacon Network）は、CWやデジタルモードの信号を自動受信・デコードしてスポットするネットワーク。PropMapではRBNスポットデータを用いて、コンテストログに記録されていない伝搬状況も可視化する。RBNデータはCWコンテスト（IARU、CQ WW CW、CQ WPX CW）でのみ利用可能</p>
+<h3 id="ssn">SSN（太陽黒点数）について</h3>
+<p><code>SN_m_tot_V2.0.txt</code>（SILSOが提供する月別太陽黒点数データ）を使用してコンテスト開催月のSSNを自動解決し、データ処理時に活用する想定(未実装)。最新データへの更新時は <a href="https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt">SILSO</a> からダウンロードして <code>~/heatmap/contest_logs/SN_m_tot_V2.0.txt</code> に上書き</p>
+<hr />
+<h2 id="10">10. 事前データ準備</h2>
+<p>PropMap を使用するには各種データを事前に構築する必要がある。ツールに含めるにはデータが大きすぎるため、利用者が自分で準備することとしている</p>
+<h3 id="_20">データ処理パイプライン</h3>
+<p>コンテストログデータの処理順序：</p>
+<pre><code class="language-no-copy">Cabrilloログ（raw/*.txt）
+    ↓
+step1_collect_logs_fast.py   ログ収集（公開ログからダウンロード）
+    ↓
+step3_grid_survey.py         グリッドロケーター含有状況の調査
+    ↓
+step4_crosscheck.py          QSOペアのクロスチェックとCSV生成
+    ↓
+step5_aggregate.py           CSV → JSON集約（heatmap.html用）
+</code></pre>
+<p>RBNデータの処理順序：</p>
+<pre><code class="language-no-copy">RBN raw data（rbn/raw/YYYYMMDD.zip）
+    ↓
+download_rbn.py              RBN rawデータのダウンロード
+    ↓
+make_spotted_grids.py        スポットされたグリッドの抽出
+    ↓
+step4_rbn.py                 RBNペアCSVの生成
+    ↓
+step5_rbn.py                 CSV → JSON集約（heatmap.html用）
+</code></pre>
+<h3 id="_21">全データの一括再生成</h3>
+<h4 id="macos-wsl2generate_allsh">macOS / WSL2（generate_all.sh）</h4>
+<p>まず contest_logs ディレクトリに移動する：</p>
+<pre><code class="language-bash">cd ~/heatmap/contest_logs
+</code></pre>
+<p>対象確認のみ（実際には実行しない）：</p>
+<pre><code class="language-bash">bash generate_all.sh --dry-run
+</code></pre>
+<p>本実行：</p>
+<pre><code class="language-bash">bash generate_all.sh
+</code></pre>
+<p>バックグラウンドで実行する場合：</p>
+<pre><code class="language-bash">nohup bash generate_all.sh &gt; gen.log 2&gt;&amp;1 &amp;
+</code></pre>
+<p>進捗確認：</p>
+<pre><code class="language-bash">tail -f gen.log
+</code></pre>
+<h4 id="windowsgenerate_allbat">Windows（generate_all.bat）</h4>
+<p>コマンドプロンプトで contest_logs ディレクトリに移動する：</p>
+<pre><code>cd %USERPROFILE%\heatmap\contest_logs
+</code></pre>
+<p>対象確認のみ（実際には実行しない）：</p>
+<pre><code>generate_all.bat --dry-run
+</code></pre>
+<p>本実行：</p>
+<pre><code>generate_all.bat
+</code></pre>
+<h3 id="sn_m_tot_v20txt">SN_m_tot_V2.0.txtの更新</h3>
+<p>太陽黒点数データは定期的に更新される。最新データを <a href="https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt">SILSO のサイト</a> からダウンロードし、<code>~/heatmap/contest_logs/SN_m_tot_V2.0.txt</code> に上書き</p>
+<h3 id="_22">各スクリプトの役割</h3>
+<table>
+<thead>
+<tr>
+<th>スクリプト</th>
+<th>役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>contest_utils.py</code></td>
+<td>コンテスト定義、パス解決、SSN自動解決の共通ユーティリティ</td>
+</tr>
+<tr>
+<td><code>step1_collect_logs_fast.py</code></td>
+<td>公開ログの収集・ダウンロード</td>
+</tr>
+<tr>
+<td><code>step3_grid_survey.py</code></td>
+<td>ログファイルのグリッドロケーター含有状況調査</td>
+</tr>
+<tr>
+<td><code>step4_crosscheck.py</code></td>
+<td>QSOのクロスチェックとペアCSV生成</td>
+</tr>
+<tr>
+<td><code>step4_rbn.py</code></td>
+<td>RBNデータの処理とペアCSV生成</td>
+</tr>
+<tr>
+<td><code>step5_aggregate.py</code></td>
+<td>QSOペアCSV → ヒートマップJSON</td>
+</tr>
+<tr>
+<td><code>step5_rbn.py</code></td>
+<td>RBNペアCSV → ヒートマップJSON</td>
+</tr>
+<tr>
+<td><code>make_spotted_grids.py</code></td>
+<td>RBNスポットグリッドの抽出</td>
+</tr>
+<tr>
+<td><code>download_rbn.py</code></td>
+<td>RBN rawデータ（zip）のダウンロード</td>
+</tr>
+<tr>
+<td><code>extract_json.py</code></td>
+<td>大容量JSONから条件を絞って切り出し</td>
+</tr>
+<tr>
+<td><code>generate_all.sh</code></td>
+<td>全コンテスト・全年の一括再生成（macOS/Linux用）</td>
+</tr>
+<tr>
+<td><code>generate_all.bat</code></td>
+<td>全コンテスト・全年の一括再生成（Windows用）</td>
+</tr>
+</tbody>
+</table>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  if (pre.querySelector('code.language-no-copy')) return;
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  btn.addEventListener('click', () => {
+    const code = pre.querySelector('code');
+    const text = code ? code.textContent : pre.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
