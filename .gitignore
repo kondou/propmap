@@ -24,6 +24,9 @@ contest_logs/rbn/
 # Log files
 *.log
 
+# Screenshots (embedded in HTML at build time)
+images/
+
 # Working / internal files
 heatmap_working.html
 handover_to_claudecode.md

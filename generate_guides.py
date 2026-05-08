@@ -3,8 +3,19 @@
 PropMap_UserGuide_ja.html / PropMap_UserGuide_en.html を生成するスクリプト
 使い方: cd ~/heatmap && python3 generate_guides.py
 """
-import markdown
+import base64, re, markdown
 from pathlib import Path
+
+def _embed_images(html, base_dir):
+    def replace(m):
+        img_path = base_dir / m.group(1)
+        if not img_path.exists():
+            return m.group(0)
+        ext = img_path.suffix.lower().lstrip('.')
+        mime = 'image/png' if ext == 'png' else f'image/{ext}'
+        data = base64.b64encode(img_path.read_bytes()).decode('ascii')
+        return f'src="data:{mime};base64,{data}"'
+    return re.sub(r'src="(images/[^"]+)"', replace, html)
 
 CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -129,6 +140,7 @@ document.querySelectorAll('pre').forEach(pre => {
 """
 
 def convert(md_path, html_path, lang, title):
+    base_dir = Path(md_path).parent
     md_text = Path(md_path).read_text(encoding='utf-8')
     md_engine = markdown.Markdown(
         extensions=['tables', 'fenced_code', 'toc', 'attr_list'],
@@ -148,6 +160,7 @@ def convert(md_path, html_path, lang, title):
 <script>{JS}</script>
 </body>
 </html>"""
+    html = _embed_images(html, base_dir)
     Path(html_path).write_text(html, encoding='utf-8')
     print(f"Generated: {html_path}")
 
