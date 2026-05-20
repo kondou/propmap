@@ -91,6 +91,7 @@ sudo apt update && sudo apt install -y python3 python3-pip
 ├── countries-50m.json        地形データ
 ├── fetch_cty.py              cty.dat 一式ダウンロードスクリプト
 ├── fetch_ssn.py              太陽黒点数データダウンロードスクリプト
+├── fetch_rbn_nodes.py        RBNノードリスト生成スクリプト
 ├── cty_data/                 cty.dat 一式（fetch_cty.py が生成）
 ├── data/
 │   ├── {contest}_{year}.json         QSOデータ（10分解像度）
@@ -98,7 +99,9 @@ sudo apt update && sudo apt install -y python3 python3-pip
 └── contest_logs/
     ├── raw/{contest}_{year}/*.txt     公開されたCabrilloログ
     ├── csv/                           処理済みCSVファイル
-    ├── rbn/                           RBNデータ
+    ├── rbn/
+    │   ├── raw/YYYYMMDD.zip            RBN rawデータ
+    │   └── rbn_nodes.csv              RBNノードリスト（fetch_rbn_nodes.py が生成）
     ├── SN_m_tot_V2.0.txt              太陽黒点数データ（SILSO）
     ├── *.py                           データ処理スクリプト群
     ├── generate_all.sh                全データ一括再生成スクリプト（macOS/Linux用）
@@ -416,13 +419,14 @@ PropMap を使用するには各種データを事前に構築する必要があ
 ``` { .no-copy }
 Cabrilloログ（raw/*.txt）
     ↓
-step1_collect_logs_fast.py   ログ収集（公開ログからダウンロード）
+step1_collect_logs_fast.py      ログ収集（公開ログからダウンロード）
     ↓
-step3_grid_survey.py         グリッドロケーター含有状況の調査
+make_spotted_grids_approx.py    コールサインからグリッドを推定（cty.dat参照）
     ↓
-step4_crosscheck.py          QSOペアのクロスチェックとCSV生成
+step4_crosscheck.py             QSOペアのクロスチェックとCSV生成（通常）
+step4_crosscheck_approx.py      同上（推定グリッドを使用）
     ↓
-step5_aggregate.py           CSV → JSON集約（heatmap.html用）
+step5_aggregate.py              CSV → JSON集約（heatmap.html用）
 ```
 
 RBNデータの処理順序：
@@ -430,13 +434,24 @@ RBNデータの処理順序：
 ``` { .no-copy }
 RBN raw data（rbn/raw/YYYYMMDD.zip）
     ↓
-download_rbn.py              RBN rawデータのダウンロード
+download_rbn.py                 RBN rawデータのダウンロード
     ↓
-make_spotted_grids.py        スポットされたグリッドの抽出
+make_spotted_grids.py           スポットされたグリッドの抽出（ログ記載値）
     ↓
-step4_rbn.py                 RBNペアCSVの生成
+step4_rbn.py                    RBNペアCSVの生成（通常）
+step4_rbn_approx.py             同上（推定グリッドを使用）
     ↓
-step5_rbn.py                 CSV → JSON集約（heatmap.html用）
+step5_rbn.py                    CSV → JSON集約（heatmap.html用）
+```
+
+RBNノードリストの更新：
+
+``` { .no-copy }
+fetch_rbn_nodes.py
+    → RBNサイトから現行ノードを取得
+    → raw zipから過去コンテストのスポッターを収集
+    → 旧ノードは cty.dat でグリッドを補完
+    → rbn/rbn_nodes.csv に保存
 ```
 
 ### 全データの一括再生成
@@ -522,10 +537,12 @@ python3 ~/heatmap/fetch_ssn.py --force
 | `step5_rbn.py` | RBNペアCSV → ヒートマップJSON |
 | `make_spotted_grids.py` | RBNスポットグリッドの抽出 |
 | `make_spotted_grids_approx.py` | RBNスポットグリッドの抽出（cty.dat フォールバック付き） |
+| `lookup_cty.py` | cty.dat からコールサインのグリッドを引くモジュール |
 | `download_rbn.py` | RBN rawデータ（zip）のダウンロード |
 | `extract_json.py` | 大容量JSONから条件を絞って切り出し |
 | `fetch_cty.py` | cty.dat 一式をダウンロード（`cty_data/` に配置） |
 | `fetch_ssn.py` | 太陽黒点数データ（SN_m_tot_V2.0.txt）をダウンロード |
+| `fetch_rbn_nodes.py` | RBNノードリスト（`rbn/rbn_nodes.csv`）を生成・更新 |
 | `generate_all.sh` | 全コンテスト・全年の一括再生成（macOS/Linux用） |
 | `generate_all.bat` | 全コンテスト・全年の一括再生成（Windows用） |
 | `check_qso_count.py` | 指定条件で `qso_pairs.csv` を検索し、パネル表示対象を確認（デバッグ用） |
