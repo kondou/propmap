@@ -1,51 +1,26 @@
 #!/usr/bin/env python3
 """
-Step 4 RBN: RBN raw dataからヒートマップ用CSVを生成
+Step 4 RBN approx: spotted_grids_approx.csv を使ったRBN処理
+
+通常版 (step4_rbn.py) との違い:
+  - spotted_grids_approx.csv（cty.dat補完あり）を使用
+  - spotted局のグリッドが cty.dat 由来の場合のみ出力（通常版との重複除外）
 
 使い方:
-  python3 step4_rbn.py \\
-    --rbn-csv rbndata_20190713.csv rbndata_20190714.csv \\
-    --log-grids ~/heatmap/contest_logs/csv/iaru_2019_qso_pairs.csv \\
-    --nodes rbn_nodes.csv \\
-    --contest iaru_2019 \\
-    --start "2019-07-13 12:00" --end "2019-07-14 12:00"
+  python3 step4_rbn_approx.py --contest iaru --year 2019
+  python3 step4_rbn_approx.py --contest cqww_cw --year 2024
 
 入力:
-  --rbn-csv     RBN raw CSV（複数指定可、zip不可・展開済みを渡す）
-  --log-grids   step4出力CSV（spotted局のグリッド解決に使用）
-                またはstep4で生成したログのグリッドDBファイル
-  --nodes       RBNノードリストCSV（spotter→グリッド対応）
-  --contest     コンテスト識別子（出力ファイル名に使用）
-  --start/--end コンテスト期間（UTC, "YYYY-MM-DD HH:MM"形式）
-
+  RBN raw zip: ~/heatmap/contest_logs/rbn/raw/YYYYMMDD.zip
+  approxグリッドDB: ~/heatmap/contest_logs/rbn/{contest}_{year}_spotted_grids_approx.csv
+  ノードリスト: ~/heatmap/contest_logs/rbn/rbn_nodes.csv
 出力:
-  ~/heatmap/contest_logs/csv/{contest}_rbn_pairs.csv
-
-RBN raw CSVフォーマット:
-  callsign, de_pfx, de_cont, freq, band, dx, dx_pfx, dx_cont,
-  mode, db, date, speed, tx_mode
-
-ノードリストCSVフォーマット（reversebeacon.net/nodes/ の詳細リスト）:
-  callsign, grid  （最低限この2列があれば他は不問）
-
-誤スポットフィルタ:
-  - tx_mode != CW はスキップ
-  - SNR (db) が --min-snr 未満はスキップ（デフォルト: 3）
-  - WPM (speed) が --min-wpm 未満または --max-wpm 超はスキップ
-    （デフォルト: 10〜60）
-  - 同一 spotter×spotted×band×t_step 内の重複スポットは1件に集約
-
-カウント仕様:
-  - 同一ロケータペア（spotter_grid4×spotted_grid4）×band×t_step で
-    ユニークspotter数をカウント（スポット数ではない）
-  - spotted局はlogsのグリッドを使用（QSOペアCSVから抽出）
-  - spotted局がlogsにない場合はスキップ
-  - spotter局がノードリストにグリッドがない場合はスキップ
+  ~/heatmap/contest_logs/csv/{contest}_{year}_rbn_pairs_approx.csv
 """
 
 import re, csv, gzip, zipfile, argparse, sys
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from collections import defaultdict, Counter
 
 # ---- i18n -------------------------------------------------------------------
@@ -77,12 +52,8 @@ except ImportError:
 GRID_RE = re.compile(r"^[A-R]{2}[0-9]{2}([A-X]{2})?$", re.IGNORECASE)
 
 BAND_MAP = {
-    "160m": (1800, 2000),
-    "80m":  (3500, 4000),
-    "40m":  (7000, 7300),
-    "20m":  (14000, 14350),
-    "15m":  (21000, 21450),
-    "10m":  (28000, 29700),
+    "160m": (1800, 2000), "80m":  (3500, 4000), "40m":  (7000, 7300),
+    "20m":  (14000, 14350), "15m":  (21000, 21450), "10m":  (28000, 29700),
 }
 
 def freq_to_band(freq_khz):
@@ -90,9 +61,6 @@ def freq_to_band(freq_khz):
         if lo <= freq_khz <= hi:
             return name
     return None
-
-def grid4(g):
-    return g.upper()[:4]
 
 def grid4_center(g):
     g = g.upper()
@@ -108,8 +76,6 @@ def load_nodes(path):
               file=sys.stderr)
         return nodes
     with open(path, newline="", encoding="utf-8", errors="replace") as f:
-        sample = f.read(4096)
-        f.seek(0)
         reader = csv.DictReader(f)
         if not reader.fieldnames:
             return nodes
@@ -120,10 +86,8 @@ def load_nodes(path):
                          if k in ("grid","gridsquare","grid_square",
                                   "locator","maidenhead","grid4")), None)
         if not call_col or not grid_col:
-            print(msg("  警告: ノードリストのcallsign/grid列が特定できません",
-                      "  Warning: callsign/grid columns not found in node list"))
-            print(msg(f"  検出されたカラム: {reader.fieldnames}",
-                      f"  Detected columns: {reader.fieldnames}"))
+            print(msg(f"  警告: ノードリストのcallsign/grid列が特定できません: {reader.fieldnames}",
+                      f"  Warning: callsign/grid columns not found in node list: {reader.fieldnames}"))
             return nodes
         for row in reader:
             call = row[call_col].strip().upper()
@@ -139,34 +103,25 @@ def load_nodes(path):
               f"  Node list: {len(nodes)} entries"))
     return nodes
 
-def load_spotted_grids(csv_paths):
+def load_spotted_grids_approx(path):
     spotted_grids  = {}
     spotted_powers = {}
-    for path in csv_paths:
-        with open(path, newline="", encoding="utf-8", errors="replace") as f:
-            reader = csv.DictReader(f)
-            fn = {k.lower().strip() for k in (reader.fieldnames or [])}
-            fn_map = {k.lower().strip(): k for k in (reader.fieldnames or [])}
-            call_col  = fn_map.get("callsign") or fn_map.get("call")
-            grid_col  = fn_map.get("grid")
-            power_col = fn_map.get("power")
-            if not call_col or not grid_col:
-                continue
-            for row in reader:
-                call = row[call_col].strip().upper()
-                g    = row[grid_col].strip().upper()
-                g4   = g[:4]
-                if call and GRID_RE.match(g4):
-                    spotted_grids[call] = g4
-                    if power_col:
-                        pw = row[power_col].strip().upper()
-                        spotted_powers[call] = pw if pw in ("HIGH","LOW","QRP") else "UNKNOWN"
-                    else:
-                        spotted_powers[call] = "UNKNOWN"
-
-    print(msg(f"  spotted局グリッドDB: {len(spotted_grids)} 局",
-              f"  Spotted station grid DB: {len(spotted_grids)} stations"))
-    return spotted_grids, spotted_powers
+    cty_calls      = set()
+    with open(path, newline="", encoding="utf-8", errors="replace") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            call   = row["callsign"].strip().upper()
+            g      = row["grid"].strip().upper()[:4]
+            source = row.get("grid_source", "log")
+            if call and GRID_RE.match(g):
+                spotted_grids[call] = g
+                pw = row.get("power", "UNKNOWN").strip().upper()
+                spotted_powers[call] = pw if pw in ("HIGH","LOW","QRP") else "UNKNOWN"
+                if source != "log":
+                    cty_calls.add(call)
+    print(msg(f"  approxグリッドDB: {len(spotted_grids)} 局（うちcty.dat: {len(cty_calls)} 局）",
+              f"  approx grid DB: {len(spotted_grids)} stations (cty.dat: {len(cty_calls)})"))
+    return spotted_grids, spotted_powers, cty_calls
 
 def open_rbn_file(path):
     import io
@@ -178,21 +133,17 @@ def open_rbn_file(path):
         names = zf.namelist()
         csv_names = [n for n in names if n.lower().endswith(".csv")]
         if not csv_names:
-            raise ValueError(msg(
-                f"ZIP内にCSVが見つかりません: {p}  (内容: {names})",
-                f"No CSV found in ZIP: {p}  (contents: {names})",
-            ))
+            raise ValueError(msg(f"ZIP内にCSVが見つかりません: {p}",
+                                 f"No CSV found in ZIP: {p}"))
         return io.TextIOWrapper(zf.open(csv_names[0]),
                                 encoding="utf-8", errors="replace", newline="")
     else:
         return open(p, newline="", encoding="utf-8", errors="replace")
 
 def parse_rbn_date(s):
-    if s is None:
-        return None
-    s = s.strip()
     if not s:
         return None
+    s = s.strip()
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M:%S"):
         try:
             return datetime.strptime(s, fmt)
@@ -202,80 +153,53 @@ def parse_rbn_date(s):
 
 def main():
     ap = argparse.ArgumentParser(
-        description=msg("RBN raw dataからヒートマップ用CSVを生成",
-                        "Generate heatmap CSV from RBN raw data")
+        description=msg("RBN approx: cty.dat補完グリッドを使ったRBN処理",
+                        "RBN approx: RBN processing using cty.dat-supplemented grids")
     )
-    ap.add_argument("--contest", required=True,
-                    help=msg("コンテスト識別子 例: iaru, cqww_cw",
-                             "Contest ID e.g.: iaru, cqww_cw"))
-    ap.add_argument("--year", type=int, required=True,
-                    help=msg("開催年 例: 2025", "Contest year e.g.: 2025"))
-    ap.add_argument("--ssn", type=int, default=None,
-                    help=msg("開催月の月平均SSN（省略時: SN_m_tot_V2.0.txt から自動取得）",
-                             "Monthly mean SSN (default: auto from SN_m_tot_V2.0.txt)"))
-    ap.add_argument("--rbn-csv", nargs="+", default=None,
-                    help=msg("RBN raw CSVファイル（省略時: ~/heatmap/contest_logs/rbn/raw/YYYYMMDD.zip）。"
-                             ".csv / .csv.gz / .zip いずれも可。",
-                             "RBN raw CSV files (default: ~/heatmap/contest_logs/rbn/raw/YYYYMMDD.zip). "
-                             ".csv / .csv.gz / .zip accepted."))
+    ap.add_argument("--contest", required=True)
+    ap.add_argument("--year", type=int, required=True)
+    ap.add_argument("--ssn", type=int, default=None)
+    ap.add_argument("--rbn-csv", nargs="+", default=None)
     ap.add_argument("--log-grids", nargs="+", default=None,
-                    help=msg("spotted局グリッドDBファイル "
-                             "(省略時: ~/heatmap/contest_logs/rbn/{contest}_{year}_spotted_grids.csv)",
-                             "Spotted station grid DB file "
-                             "(default: ~/heatmap/contest_logs/rbn/{contest}_{year}_spotted_grids.csv)"))
-    ap.add_argument("--nodes", default=None,
-                    help=msg("RBNノードリストCSV (省略時: ~/heatmap/contest_logs/rbn/rbn_nodes.csv)",
-                             "RBN node list CSV (default: ~/heatmap/contest_logs/rbn/rbn_nodes.csv)"))
-    ap.add_argument("--start", default=None,
-                    help=msg("コンテスト開始UTC (省略時: --contestと--yearから自動計算)",
-                             "Contest start UTC (default: auto from --contest and --year)"))
-    ap.add_argument("--end", default=None,
-                    help=msg("コンテスト終了UTC (省略時: --contestと--yearから自動計算)",
-                             "Contest end UTC (default: auto from --contest and --year)"))
-    ap.add_argument("--out-dir", default=None,
-                    help=msg("出力先ディレクトリ（省略時: ~/heatmap/contest_logs/csv/）",
-                             "Output directory (default: ~/heatmap/contest_logs/csv/)"))
-    ap.add_argument("--time-resolution", type=int, default=10,
-                    help=msg("時間解像度（分）（デフォルト: 10）",
-                             "Time resolution in minutes (default: 10)"))
-    ap.add_argument("--min-snr", type=int, default=3,
-                    help=msg("最小SNR dB（デフォルト: 3）",
-                             "Minimum SNR dB (default: 3)"))
-    ap.add_argument("--min-wpm", type=int, default=10,
-                    help=msg("最小WPM（デフォルト: 10）", "Minimum WPM (default: 10)"))
-    ap.add_argument("--max-wpm", type=int, default=60,
-                    help=msg("最大WPM（デフォルト: 60）", "Maximum WPM (default: 60)"))
+                    help=msg("spotted_grids_approx.csv のパス（複数可）",
+                             "Path(s) to spotted_grids_approx.csv"))
+    ap.add_argument("--nodes", default=None)
+    ap.add_argument("--start", default=None)
+    ap.add_argument("--end", default=None)
+    ap.add_argument("--out-dir", default=None)
+    ap.add_argument("--time-resolution", type=int, default=10)
+    ap.add_argument("--min-snr", type=int, default=3)
+    ap.add_argument("--min-wpm", type=int, default=10)
+    ap.add_argument("--max-wpm", type=int, default=60)
     args = ap.parse_args()
 
     _resolve_ssn = None
     try:
         sys.path.insert(0, str(Path(__file__).parent))
         from contest_utils import (validate_contest, get_contest_dates, rbn_raw_zips,
-                                   spotted_grids_csv, rbn_pairs_csv, CONTEST_CFG,
-                                   resolve_ssn as _resolve_ssn)
+                                   spotted_grids_approx_csv, rbn_pairs_approx_csv,
+                                   CONTEST_CFG, resolve_ssn as _resolve_ssn)
         validate_contest(args.contest)
         cfg = CONTEST_CFG[args.contest]
         if not cfg["has_rbn"]:
             print(msg(f"情報: {args.contest} はRBNデータなし（SSBコンテスト）。スキップします。",
                       f"Info: {args.contest} has no RBN data (SSB contest). Skipping."))
             return
-        _start, _end = get_contest_dates(args.contest, args.year)
-        _rbn_csvs    = rbn_raw_zips(args.contest, args.year)
-        _log_grids   = [spotted_grids_csv(args.contest, args.year)]
-        _out_csv     = rbn_pairs_csv(args.contest, args.year)
+        _start, _end   = get_contest_dates(args.contest, args.year)
+        _rbn_csvs      = rbn_raw_zips(args.contest, args.year)
+        _log_grids     = [spotted_grids_approx_csv(args.contest, args.year)]
+        _out_csv       = rbn_pairs_approx_csv(args.contest, args.year)
     except (ImportError, ValueError) as e:
         print(msg(f"警告: contest_utils未使用 ({e})",
                   f"Warning: contest_utils not used ({e})"))
         _start = _end = None
         _rbn_csvs  = []
         cid = f"{args.contest}_{args.year}"
-        _log_grids = [Path.home()/"heatmap"/"contest_logs"/"rbn"/f"{cid}_spotted_grids.csv"]
-        _out_csv   = Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_rbn_pairs.csv"
+        _log_grids = [Path.home()/"heatmap"/"contest_logs"/"rbn"/f"{cid}_spotted_grids_approx.csv"]
+        _out_csv   = Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_rbn_pairs_approx.csv"
 
-    start_dt = (datetime.strptime(args.start, "%Y-%m-%d %H:%M")
-                if args.start else _start)
-    end_dt   = (datetime.strptime(args.end,   "%Y-%m-%d %H:%M")
-                if args.end   else _end)
+    start_dt = datetime.strptime(args.start, "%Y-%m-%d %H:%M") if args.start else _start
+    end_dt   = datetime.strptime(args.end,   "%Y-%m-%d %H:%M") if args.end   else _end
     if not start_dt or not end_dt:
         print(msg("エラー: --start と --end を指定するか、contest_utils.py を同ディレクトリに置いてください",
                   "Error: specify --start and --end, or place contest_utils.py in the same directory"))
@@ -296,35 +220,26 @@ def main():
                            script_dir=Path(__file__).parent)
     else:
         ssn = args.ssn if args.ssn is not None else 0
-        if ssn == 0:
-            print(msg("警告: contest_utils未使用のためSSN=0を使用します。",
-                      "Warning: contest_utils not available, using SSN=0."))
 
     missing_grids = [p for p in log_grid_paths if not p.exists()]
     if missing_grids:
-        print(msg("エラー: 以下のspotted局グリッドDBが見つかりません:",
-                  "Error: spotted station grid DB not found:"))
+        print(msg("エラー: 以下のapproxグリッドDBが見つかりません:",
+                  "Error: approx grid DB not found:"))
         for p in missing_grids: print(f"  {p}")
-        print(msg("  make_spotted_grids.py を先に実行してください。",
-                  "  Run make_spotted_grids.py first."))
+        print(msg("  make_spotted_grids_approx.py を先に実行してください。",
+                  "  Run make_spotted_grids_approx.py first."))
         return
-    log_grid_paths = [p for p in log_grid_paths if p.exists()]
 
-    missing = [p for p in rbn_csv_paths if not p.exists()]
-    if missing:
-        print(msg("警告: 以下のRBN rawファイルが見つかりません:",
-                  "Warning: RBN raw files not found:"))
-        for p in missing: print(f"  {p}")
-        rbn_csv_paths = [p for p in rbn_csv_paths if p.exists()]
-        if not rbn_csv_paths:
-            print(msg("エラー: RBN rawファイルが1件もありません → 空CSVを生成",
-                      "Error: no RBN raw files found → generating empty CSV"))
-            _fn = ["grid_tx","grid_rx","band","mode","utc_hour","utc_min",
-                   "utc_month","utc_day","distance_km","ssn","tier","source","lon_tx",
-                   "power_tx","power_rx","call_dist","band_fix","spotter_count"]
-            with open(out_csv,"w",newline="",encoding="utf-8") as _f:
-                csv.DictWriter(_f,fieldnames=_fn).writeheader()
-            return
+    rbn_csv_paths = [p for p in rbn_csv_paths if p.exists()]
+    if not rbn_csv_paths:
+        print(msg("エラー: RBN rawファイルが1件もありません → 空CSVを生成",
+                  "Error: no RBN raw files found → generating empty CSV"))
+        _fn = ["grid_tx","grid_rx","band","mode","utc_hour","utc_min",
+               "utc_month","utc_day","distance_km","ssn","tier","source","lon_tx",
+               "power_tx","power_rx","call_dist","band_fix","spotter_count"]
+        with open(out_csv,"w",newline="",encoding="utf-8") as _f:
+            csv.DictWriter(_f,fieldnames=_fn).writeheader()
+        return
 
     print(msg(f"期間: {start_dt} 〜 {end_dt} UTC",
               f"Period: {start_dt} to {end_dt} UTC"))
@@ -343,18 +258,19 @@ def main():
         print(msg(f"  警告: cty.dat読み込み失敗 - spotter fallbackなし ({e})",
                   f"  Warning: cty.dat load failed - no spotter fallback ({e})"))
 
-    print(msg("\nspotted局グリッドDB読み込み:", "\nLoading spotted station grid DB:"))
-    spotted_grids, spotted_powers = load_spotted_grids(log_grid_paths)
+    print(msg("\napproxグリッドDB読み込み:", "\nLoading approx grid DB:"))
+    spotted_grids = {}
+    spotted_powers = {}
+    cty_calls = set()
+    for path in log_grid_paths:
+        sg, sp, cc = load_spotted_grids_approx(path)
+        spotted_grids.update(sg)
+        spotted_powers.update(sp)
+        cty_calls.update(cc)
 
-    if not spotted_grids:
-        print(msg("  情報: spotted局グリッドDBが空です → 空CSVを生成",
-                  "  Info: spotted station grid DB is empty → generating empty CSV"))
-        _fn = ["grid_tx","grid_rx","band","mode","utc_hour","utc_min",
-               "utc_month","utc_day","distance_km","ssn","tier","source","lon_tx",
-               "power_tx","power_rx","call_dist","band_fix","spotter_count"]
-        with open(out_csv,"w",newline="",encoding="utf-8") as _f:
-            csv.DictWriter(_f,fieldnames=_fn).writeheader()
-        return
+    if not cty_calls:
+        print(msg("  情報: cty.dat由来グリッドの局がありません。出力は空になります。",
+                  "  Info: no stations with cty.dat-derived grids. Output will be empty."))
 
     res_min = args.time_resolution
     steps_per_day = 24 * 60 // res_min
@@ -362,8 +278,8 @@ def main():
     agg = defaultdict(set)
     total_rows = 0
     skipped = {"period": 0, "mode": 0, "snr": 0, "wpm": 0,
-               "no_spotter_grid": 0, "no_spotted_grid": 0, "band": 0}
-    spotter_cty_ok   = 0
+               "no_spotter_grid": 0, "no_spotted_grid": 0, "not_cty": 0, "band": 0}
+    spotter_cty_ok  = 0
     unknown_spotters = Counter()
     unknown_spotted  = Counter()
 
@@ -409,14 +325,8 @@ def main():
             c_txmode  = col(["tx_mode","txmode"])
 
             if not all([c_spotter, c_dx, c_date]):
-                missing = [v for v,c in [("spotter",c_spotter),("dx",c_dx),("date",c_date)] if not c]
-                print(msg(f"  エラー: 必須カラムが見つかりません: {missing}",
-                          f"  Error: required columns not found: {missing}"))
-                print(msg(f"  検出カラム: {reader.fieldnames}",
-                          f"  Detected columns: {reader.fieldnames}"))
-                print(msg("  ヒント: RBN CSVの期待するヘッダー:",
-                          "  Hint: expected RBN CSV header:"))
-                print("    callsign,de_pfx,de_cont,freq,band,dx,dx_pfx,dx_cont,mode,db,date,speed,tx_mode")
+                print(msg("  エラー: 必須カラムが見つかりません",
+                          "  Error: required columns not found"))
                 continue
 
             row_count = 0
@@ -492,10 +402,16 @@ def main():
                     unknown_spotted[dx_base or dx_raw] += 1
                     continue
 
-                utc_day = (dt.date() - start_dt.date()).days
-                t_step = (utc_day * 1440 + dt.hour * 60 + dt.minute) // res_min
+                dx_key = dx_raw if dx_raw in cty_calls else dx_base
+                if dx_key not in cty_calls:
+                    skipped["not_cty"] += 1
+                    continue
 
-                pw_spotted = spotted_powers.get(dx_raw) or spotted_powers.get(dx_base) or "UNKNOWN"
+                utc_day = (dt.date() - start_dt.date()).days
+                t_step  = (utc_day * 1440 + dt.hour * 60 + dt.minute) // res_min
+
+                pw_spotted = (spotted_powers.get(dx_raw)
+                              or spotted_powers.get(dx_base) or "UNKNOWN")
 
                 agg[(sg, dg, band, t_step, pw_spotted)].add(spotter_raw)
 
@@ -530,6 +446,8 @@ def main():
                   "  --- Top 20 unresolved spotted ---"))
         for call, cnt in unknown_spotted.most_common(20):
             print(f"    {call:<16s} {cnt:8d}")
+    print(msg(f"  cty.dat由来でない:         {skipped['not_cty']:8d}",
+              f"  Not cty.dat-derived:       {skipped['not_cty']:8d}"))
 
     pairs = []
     for (sg, dg, band, t_step, pw_spotted), spotters in agg.items():
@@ -538,9 +456,9 @@ def main():
             lat_rx, lon_rx = grid4_center(dg)
         except Exception:
             continue
-        day_min   = t_step * res_min
-        utc_day   = day_min // 1440
-        utc_min   = day_min % 1440
+        day_min = t_step * res_min
+        utc_day = day_min // 1440
+        utc_min = day_min % 1440
         pairs.append({
             "grid_tx":       sg,
             "grid_rx":       dg,
@@ -568,16 +486,6 @@ def main():
         })
 
     print(msg(f"\n集約ペア数: {len(pairs)}", f"\nAggregated pairs: {len(pairs)}"))
-
-    print(msg("\n=== バンド別 ===", "\n=== By band ==="))
-    for b, c in sorted(Counter(p["band"] for p in pairs).items(),
-                       key=lambda x: -x[1]):
-        print(f"  {b:6s}: {c:6d}")
-    print(msg("\n=== spotter数分布 ===", "\n=== Spotter count distribution ==="))
-    dist = Counter(p["spotter_count"] for p in pairs)
-    for n in sorted(dist):
-        print(msg(f"  {n:3d} spotters: {dist[n]:6d} ペア",
-                  f"  {n:3d} spotters: {dist[n]:6d} pairs"))
 
     fieldnames = [
         "grid_tx", "grid_rx", "band", "mode", "utc_hour", "utc_min",

@@ -31,12 +31,38 @@ step1_collect_logs_fast.py  ―  全コンテスト・全年対応 並列ダウ�
   ~/contest_logs/raw/{contest_key}_{year}/  ← 年ごとにディレクトリを分ける
 """
 
-import re, time, argparse
+import re, time, argparse, sys
 import urllib.request, urllib.error
 from pathlib import Path
 from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
+
+# ---- i18n -------------------------------------------------------------------
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from contest_utils import msg
+except ImportError:
+    import locale as _lc, os as _os
+    def _dlang():
+        for v in [_os.environ.get(e, '') for e in ('LANG', 'LC_ALL', 'LANGUAGE')]:
+            if v: return 'ja' if v.lower().startswith('ja') else 'en'
+        try:
+            _lc.setlocale(_lc.LC_ALL, '')
+            lc = _lc.getlocale()[0] or ''
+            if lc.lower().startswith('ja'): return 'ja'
+        except Exception: pass
+        if sys.platform == 'win32':
+            try:
+                import winreg as _wr
+                k = _wr.OpenKey(_wr.HKEY_CURRENT_USER, r'Control Panel\International')
+                l = _wr.QueryValueEx(k, 'LocaleName')[0]; _wr.CloseKey(k)
+                if l.startswith('ja'): return 'ja'
+            except Exception: pass
+        return 'en'
+    _L = _dlang()
+    def msg(ja, en=''): return ja if _L == 'ja' else (en or ja)
+# -----------------------------------------------------------------------------
 
 # ---- コンテスト定義 -------------------------------------------------------
 
@@ -51,7 +77,6 @@ IARU_YEAR_URLS = {
     2025: "https://contests.arrl.org/publiclogs.php?eid=4&iid=1110",
 }
 
-# 各コンテスト開催月の月平均SSN（SILSO参照、概算）
 SSN_TABLE = {
     "iaru":      {2018:45,2019:68,2020:20,2021:30,2022:95,2023:145,2024:180,2025:160},
     "cqww_cw":   {2005:30,2006:15,2007:10,2008:5,2009:3,2010:18,2011:55,2012:90,
@@ -112,10 +137,9 @@ class LogListParser(HTMLParser):
         super().__init__()
         self.base_url = base_url
         self.log_type = log_type
-        # cqdirの相対パス解決用: list_urlのディレクトリ部分
         if list_url and not list_url.endswith("/"):
             list_url = list_url.rsplit("/", 1)[0] + "/"
-        self.list_dir = list_url  # 例: https://cqww.com/publiclogs/2024cw/
+        self.list_dir = list_url
         self.urls = []
 
     def handle_starttag(self, tag, attrs):
@@ -130,7 +154,6 @@ class LogListParser(HTMLParser):
                 self.urls.append(url)
 
         elif self.log_type == "cqdir":
-            # .log / .cbr / .txt ファイルへの直リンク
             low = href.lower()
             if any(low.endswith(ext) for ext in (".log",".cbr",".txt")):
                 if href.startswith("http"):
@@ -138,7 +161,6 @@ class LogListParser(HTMLParser):
                 elif href.startswith("/"):
                     url = self.base_url + href
                 else:
-                    # 相対パス: list_urlのディレクトリを基準に解決
                     url = self.list_dir + href.lstrip("/")
                 self.urls.append(url)
 
@@ -199,7 +221,8 @@ def collect_year(contest_key: str, year: int, workers: int,
     defn = CONTEST_DEFS[contest_key]
     list_url = defn["get_list_url"](year)
     if not list_url:
-        print(f"  [{contest_key}/{year}] URL未定義")
+        print(msg(f"  [{contest_key}/{year}] URL未定義",
+                  f"  [{contest_key}/{year}] URL not defined"))
         return 0
 
     save_dir = BASE_SAVE / f"{contest_key}_{year}"
@@ -207,7 +230,8 @@ def collect_year(contest_key: str, year: int, workers: int,
 
     html = fetch(list_url)
     if not html:
-        print(f"  [{contest_key}/{year}] 一覧取得失敗: {list_url}")
+        print(msg(f"  [{contest_key}/{year}] 一覧取得失敗: {list_url}",
+                  f"  [{contest_key}/{year}] Failed to fetch list: {list_url}"))
         return 0
 
     parser = LogListParser(defn["base_url"], defn["log_type"], list_url)
@@ -215,14 +239,16 @@ def collect_year(contest_key: str, year: int, workers: int,
     urls = parser.urls
 
     if not urls:
-        print(f"  [{contest_key}/{year}] ログURL 0件 → {list_url}")
+        print(msg(f"  [{contest_key}/{year}] ログURL 0件 → {list_url}",
+                  f"  [{contest_key}/{year}] No log URLs found → {list_url}"))
         return 0
 
     if max_logs:
         urls = urls[:max_logs]
 
     total = len(urls)
-    print(f"\n[{contest_key} / {year}]  {total} 件  → {save_dir}")
+    print(msg(f"\n[{contest_key} / {year}]  {total} 件  → {save_dir}",
+              f"\n[{contest_key} / {year}]  {total} logs  → {save_dir}"))
 
     with _lock:
         _cnt["done"] = _cnt["skip"] = _cnt["fail"] = 0
@@ -237,14 +263,23 @@ def collect_year(contest_key: str, year: int, workers: int,
                 rate = i/elapsed if elapsed > 0 else 0
                 remain = (total-i)/rate if rate > 0 else 0
                 with _lock:
-                    print(f"  {i:5d}/{total}  "
-                          f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}  "
-                          f"{rate:.1f}件/s  残≈{remain/60:.1f}分")
+                    print(msg(
+                        f"  {i:5d}/{total}  "
+                        f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}  "
+                        f"{rate:.1f}件/s  残≈{remain/60:.1f}分",
+                        f"  {i:5d}/{total}  "
+                        f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}  "
+                        f"{rate:.1f} logs/s  ETA≈{remain/60:.1f}min",
+                    ))
 
     with _lock:
         elapsed = time.time()-t0
-        print(f"  完了 {elapsed/60:.1f}分  "
-              f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}")
+        print(msg(
+            f"  完了 {elapsed/60:.1f}分  "
+            f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}",
+            f"  Done {elapsed/60:.1f}min  "
+            f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}",
+        ))
         return _cnt["done"]
 
 # ---- メイン ----------------------------------------------------------------
@@ -254,12 +289,12 @@ def main():
     ap.add_argument("-c","--contest", required=True,
                     choices=list(CONTEST_DEFS.keys()))
     ap.add_argument("-y","--years", type=int, nargs="+",
-                    help="対象年（複数可）")
+                    help=msg("対象年（複数可）", "Target year(s)"))
     ap.add_argument("--all-years", action="store_true",
-                    help="コンテストの全年を対象")
+                    help=msg("コンテストの全年を対象", "Process all available years"))
     ap.add_argument("-w","--workers", type=int, default=6)
     ap.add_argument("-n","--max-logs", type=int, default=None,
-                    help="最大件数（テスト用）")
+                    help=msg("最大件数（テスト用）", "Max logs to fetch (for testing)"))
     ap.add_argument("--no-resume", dest="resume",
                     action="store_false", default=True)
     args = ap.parse_args()
@@ -271,25 +306,28 @@ def main():
     elif args.years:
         bad = [y for y in args.years if y not in defn["years"]]
         if bad:
-            print(f"対応外の年: {bad}  対応年: {defn['years']}")
+            print(msg(f"対応外の年: {bad}  対応年: {defn['years']}",
+                      f"Unsupported year(s): {bad}  Valid: {defn['years']}"))
             return
         years = args.years
     else:
-        ap.error("-y/--years か --all-years を指定してください")
+        ap.error(msg("-y/--years か --all-years を指定してください",
+                     "Specify -y/--years or --all-years"))
         return
 
-    print(f"コンテスト: {args.contest}")
-    print(f"対象年    : {years}")
-    print(f"並列数    : {args.workers}")
-    print(f"resume    : {args.resume}")
-    print(f"保存先    : {BASE_SAVE}")
+    print(msg(f"コンテスト: {args.contest}", f"Contest:  {args.contest}"))
+    print(msg(f"対象年    : {years}",         f"Years:    {years}"))
+    print(msg(f"並列数    : {args.workers}",  f"Workers:  {args.workers}"))
+    print(msg(f"resume    : {args.resume}",   f"Resume:   {args.resume}"))
+    print(msg(f"保存先    : {BASE_SAVE}",     f"Save dir: {BASE_SAVE}"))
 
     total_new = 0
     for year in sorted(years):
         total_new += collect_year(
             args.contest, year, args.workers, args.max_logs, args.resume)
 
-    print(f"\n全体完了: 新規取得 {total_new} 件")
+    print(msg(f"\n全体完了: 新規取得 {total_new} 件",
+              f"\nAll done: {total_new} new logs downloaded"))
 
 if __name__ == "__main__":
     main()

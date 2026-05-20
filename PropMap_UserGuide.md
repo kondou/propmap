@@ -81,12 +81,17 @@ sudo apt update && sudo apt install -y python3 python3-pip
 
 ### ファイル構成
 
+すべてのファイルは `~/heatmap/`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap\`（Windows）以下に配置する。
+
 ``` { .no-copy }
 ~/heatmap/
 ├── heatmap.html              メインアプリ（単一ファイル完結）
 ├── start_heatmap.command     起動スクリプト（macOS用）
 ├── start_heatmap.bat         起動スクリプト（Windows用）
 ├── countries-50m.json        地形データ
+├── fetch_cty.py              cty.dat 一式ダウンロードスクリプト
+├── fetch_ssn.py              太陽黒点数データダウンロードスクリプト
+├── cty_data/                 cty.dat 一式（fetch_cty.py が生成）
 ├── data/
 │   ├── {contest}_{year}.json         QSOデータ（10分解像度）
 │   └── {contest}_{year}_rbn.json     RBNデータ（10分解像度）
@@ -96,8 +101,8 @@ sudo apt update && sudo apt install -y python3 python3-pip
     ├── rbn/                           RBNデータ
     ├── SN_m_tot_V2.0.txt              太陽黒点数データ（SILSO）
     ├── *.py                           データ処理スクリプト群
-    ├── generate_all.sh                QSO/RBN一括再生成スクリプト（macOS/Linux用）
-    └── generate_all.bat               QSO/RBN一括再生成スクリプト（Windows用）
+    ├── generate_all.sh                全データ一括再生成スクリプト（macOS/Linux用）
+    └── generate_all.bat               全データ一括再生成スクリプト（Windows用）
 ```
 
 ### 起動方法
@@ -167,6 +172,26 @@ python -m http.server 8765 --directory %USERPROFILE%\heatmap
 
 地図をドラッグすると中心グリッド名が地図上にフル輝度で表示される。ドラッグ終了後 3 秒で自動的に薄くなり、グリッドパネルの表示に干渉しにくくなる。
 
+**Pan チェックボックス**
+
+チェックを入れると地図がパンモードになる。
+
+- **ドラッグ**: 投影の中心（Center グリッド）を変えずに地図表示位置を移動する。PM52 が中心でもヨーロッパ方面など表示範囲外の地域を大圏地図の表示円内に引き込んで確認可能
+- **Ctrl + スクロール / ピンチ操作**: 表示スケールを変更（ベクター再描画のため画質劣化しない）
+  - ズームイン: 現在のカーソル位置を中心に拡大
+  - ズームアウト: 縮小により広い範囲を表示。全球が収まった時点でそれ以上の縮小は不可
+- **チェックを外す / オーバーレイクリック**: 移動・スケール変更をリセットして元の表示に戻す
+
+パンモードで地図が移動またはスケール変更されている間は、以下の要素は非表示（地図の表示を単純化）:
+
+| 非表示になるもの | 理由 |
+|---|---|
+| 中心グリッドマーカー（赤丸・ラベル） | 投影中心が地図の中心から外れるため |
+| 距離同心円とラベル | 大圏地図の中心が不明瞭となるため |
+| Dist 青丸 | 同上 |
+| ベアリング角度ラベル（N/30/60/E…） | 方位線は残ったまま |
+| 圏外グリッドの三角マーク | 大圏地図の中心が不明瞭となるため |
+
 ### コンテスト・バンド・モード・パワーの選択
 
 | 項目 | 説明 |
@@ -180,7 +205,7 @@ python -m http.server 8765 --directory %USERPROFILE%\heatmap
 
 ### 年の選択と複数年マージ
 
-**Year** の各チェックボックスで表示する年を選択。複数年を同時にチェックするとデータをマージして重ね合わせ表示する。複数年マージは過去の傾向を総合的に把握する際に有効。公開ログの古いものについてはグリッドロケータの情報がないものが多いためヒートマップに何も表示されないものについてはこのあたりの背景を理解しておくとよい
+**Year** の各チェックボックスで表示する年を選択。複数年を同時にチェックするとデータをマージして重ね合わせ表示する。複数年マージは過去の傾向を総合的に把握する際に有効。公開ログの古いものについてはグリッドロケータの情報がないものが多いためヒートマップに何も表示されないものについてはこのあたりの背景を理解しておくとよい。このような局を補完表示したい場合は **est. QSO** チェックボックスを参照
 
 画面右上に読み込んだレコード数と年が表示される（例: `1,916,313 records (2025)`、`1,052,123 records (2024+2025)`）
 
@@ -245,9 +270,24 @@ CW のモードがあるコンテストのみ表示可能。SSBコンテスト�
 - 色は **低（暗紫）→ マゼンタ → 高（白）** のグラデーション
 - 画面左上の **RBN** カラースケールバーで確認可能
 
+### est. QSO / est. RBN（推定グリッドデータ）
+
+2018 年頃までのコンテストログではグリッドロケータ（MY LOCATOR）用のヘッダの多くが空、あるいはヘッダが使用されておらず、パネルとして表示される数がごくわずかあるいは、0 となってしまう。**est. QSO** および **est. RBN** チェックボックスを ON にすることで cty.dat を参照し、コールサインからグリッドロケータを推定表示する。
+
+- **est. QSO**: グリッドロケータ不定局の QSO データを追加表示
+- **est. RBN**: グリッドロケータ不定のスポット局の RBN データを追加表示（CW のあるコンテストのみ）
+
+注意事項:
+
+- グリッドロケータの情報は cty.dat で定義されているエンティティ（国・地域）あるいはコールエリアレベルの精度であり、実際の運用場所とは異なる場合がある
+- 通常の QSO / RBN データと重複しない
+- 右上のレコード数表示に `(+N est.)` として est. データのレコード数を追記
+
 ### 圏外グリッドの三角マーク
 
 大圏地図の表示範囲（円）の外側に存在するグリッドは、円の外周上に三角マークとして方位角を示す形で表示。QSOデータは白系、RBNデータはマゼンタ系の三角で表示。同じ方位に複数のグリッドがある場合は少しずつずらして表示。三角マークは点滅
+
+Pan モードで地図が移動または縮尺が変更されていると非表示
 
 ### グレーライン（明暗境界線）
 
@@ -455,7 +495,19 @@ generate_all.bat
 
 ### SN_m_tot_V2.0.txtの更新
 
-太陽黒点数データは定期的に更新される。最新データを [SILSO のサイト](https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt) からダウンロードし、`~/heatmap/contest_logs/SN_m_tot_V2.0.txt` に上書き
+太陽黒点数データは定期的に更新される。`fetch_ssn.py` で最新版をダウンロードする
+
+```bash
+python3 ~/heatmap/fetch_ssn.py
+```
+
+すでにファイルが存在する場合はレコード数を比較してスキップする。強制上書きするには `--force` を付ける
+
+```bash
+python3 ~/heatmap/fetch_ssn.py --force
+```
+
+更新後は影響するコンテスト・年のデータを再生成することで最新の SSN 値が CSV レコードに反映される（現状 SSN は RBN ペア CSV のメタデータフィールドとして記録されているが、ヒートマップ表示への直接の影響はなく、この値の利用は未実装）
 
 ### 各スクリプトの役割
 
@@ -469,7 +521,80 @@ generate_all.bat
 | `step5_aggregate.py` | QSOペアCSV → ヒートマップJSON |
 | `step5_rbn.py` | RBNペアCSV → ヒートマップJSON |
 | `make_spotted_grids.py` | RBNスポットグリッドの抽出 |
+| `make_spotted_grids_approx.py` | RBNスポットグリッドの抽出（cty.dat フォールバック付き） |
 | `download_rbn.py` | RBN rawデータ（zip）のダウンロード |
 | `extract_json.py` | 大容量JSONから条件を絞って切り出し |
+| `fetch_cty.py` | cty.dat 一式をダウンロード（`cty_data/` に配置） |
+| `fetch_ssn.py` | 太陽黒点数データ（SN_m_tot_V2.0.txt）をダウンロード |
 | `generate_all.sh` | 全コンテスト・全年の一括再生成（macOS/Linux用） |
 | `generate_all.bat` | 全コンテスト・全年の一括再生成（Windows用） |
+| `check_qso_count.py` | 指定条件で `qso_pairs.csv` を検索し、パネル表示対象を確認（デバッグ用） |
+| `check_rbn_count.py` | 指定条件で `rbn_pairs.csv` を検索し、RBNパネル表示対象を確認（デバッグ用） |
+| `check_rbn_detail.py` | `*_rbn.json` のレコード構造を確認（デバッグ用） |
+
+---
+
+## 11. トラブルシューティング
+
+### `heatmap.html` をブラウザで直接開いてもデータが表示されない
+
+`file://` プロトコルではブラウザのセキュリティ制限により JSON データの読み込みがブロックされる。必ずローカルサーバー経由でアクセスすること（[起動方法](#起動方法) 参照）
+
+### パネルが1件も表示されない
+
+以下の順で確認する。
+
+1. **JSON ファイルの存在確認**  
+   `data/` に対象ファイル（例: `cqwpx_cw_2024.json`）があるか確認する。なければ `generate_all.sh`（または `.bat`）で再生成する。既存ファイルがあってもステップを強制再実行したい場合は `--force` を付ける
+
+   ```bash
+   cd ~/heatmap/contest_logs
+   bash generate_all.sh          # 未生成ファイルのみ処理
+   bash generate_all.sh --force  # 全ステップ強制再実行
+   ```
+
+2. **コンテスト・年・フィルター設定の確認**  
+   Band / Mode / Dist / Year の選択が意図したものになっているか確認する。特に Dist が小さすぎると表示対象が少なくなる
+
+3. **CSV レベルでの確認（QSO）**  
+   ```bash
+   python3 check_qso_count.py --contest cqwpx_cw --year 2024 \
+     --center PM52 --dist-km 500 --hour 12 --min 0
+   ```
+   該当なしであればそのコンテスト・年・各条件にパネル表示対象の QSO が存在しないことを意味する
+
+4. **CSV レベルでの確認（RBN）**  
+   ```bash
+   python3 check_rbn_count.py --contest cqwpx_cw --year 2024 \
+     --center PM52 --dist-km 500 --hour 12 --min 0
+   ```
+
+### est. データが表示されない
+
+`data/` に `*_approx.json` ファイルが存在しない。通常は `generate_all.sh`（または `.bat`）が approx ステップも含めて自動実行する。特定コンテスト・年の approx だけ手動で再生成したい場合は以下を実行する
+
+```bash
+cd ~/heatmap/contest_logs
+python3 step4_crosscheck_approx.py --contest cqwpx_cw --year 2024 \
+  --max-call-dist 2 --band-fix-window 15 --annotate-logs
+python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
+  --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
+  --output ../data/cqwpx_cw_2024_approx.json
+```
+
+### アニメーション（点滅）がカクつく・止まる
+
+- PropMap のタブをバックグラウンドにするとブラウザのタイマー制限により点滅が一時停止する。これはブラウザの仕様であり不具合ではない
+- 他タブ・ウィンドウで重い処理（動画・WebGL 等）を開いている場合、CPU リソース競合によりカクつくことがある。PropMap タブをアクティブにし、他の重いページを閉じると改善する
+
+### 初回読み込みが遅い
+
+JSON ファイルは 1 ファイルあたり数十〜200MB 超になる場合があり、初回読み込みに数秒かかることがある。これはデータ量に起因するものであり、2 回目以降はブラウザキャッシュが効く
+
+### ブラウザ互換性
+
+Chrome / Safari / Edge で動作確認済み。Firefox でも動作するが、大量データ処理時のパフォーマンスに差が出ることがある
+
+### スマートフォン・タブレットでの利用
+
+動作確認・使用を想定していない。PC ブラウザでの利用を前提とする

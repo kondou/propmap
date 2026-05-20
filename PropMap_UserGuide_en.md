@@ -180,7 +180,7 @@ For single mode contests (CW-only or SSB-only), other modes cannot be selected.
 
 ### Year Selection and Multi-Year Merge
 
-Use the **Year** checkboxes to select which years to display. Checking multiple years merges and overlays the data. Multi-year merge is useful for understanding overall propagation trends. Note that older public logs often lack grid locator data, so the heatmap may be empty for those years.
+Use the **Year** checkboxes to select which years to display. Checking multiple years merges and overlays the data. Multi-year merge is useful for understanding overall propagation trends. Note that older public logs often lack grid locator data, so the heatmap may be empty for those years. To supplement the display for such stations, see the **est. QSO** checkbox.
 
 The number of loaded records and the selected year(s) are shown in the upper right of the screen (e.g., `1,916,313 records (2025)`, `1,052,123 records (2024+2025)`).
 
@@ -244,6 +244,19 @@ Available only for contests with a CW mode. Switching to an SSB contest automati
 
 - Color gradient: **low (dark purple) → magenta → high (white)**
 - The **RBN** color scale bar in the upper left shows the mapping
+
+### est. QSO / est. RBN (Estimated Grid Data)
+
+In contest logs up to around 2018, many stations did not declare a grid locator (MY LOCATOR) in their log headers, resulting in few or no grid panels being displayed. Enabling the **est. QSO** and **est. RBN** checkboxes supplements these stations with positions estimated from their callsign prefix using cty.dat.
+
+- **est. QSO**: Adds QSO data for stations without a grid locator declaration
+- **est. RBN**: Adds RBN data for spot stations without a grid locator declaration (CW contests only)
+
+Notes:
+
+- Grid locator accuracy is at the entity (country/territory) or call area level as defined in cty.dat, and may differ from the actual operating location
+- No overlap with regular QSO / RBN data
+- The record count in the upper right shows `(+N est.)` for est. data record counts
 
 ### Out-of-Range Grid Markers
 

@@ -11,6 +11,32 @@ import csv, json, argparse, sys
 from pathlib import Path
 from collections import defaultdict
 
+# ---- i18n -------------------------------------------------------------------
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from contest_utils import msg
+except ImportError:
+    import locale as _lc, os as _os
+    def _dlang():
+        for v in [_os.environ.get(e, '') for e in ('LANG', 'LC_ALL', 'LANGUAGE')]:
+            if v: return 'ja' if v.lower().startswith('ja') else 'en'
+        try:
+            _lc.setlocale(_lc.LC_ALL, '')
+            lc = _lc.getlocale()[0] or ''
+            if lc.lower().startswith('ja'): return 'ja'
+        except Exception: pass
+        if sys.platform == 'win32':
+            try:
+                import winreg as _wr
+                k = _wr.OpenKey(_wr.HKEY_CURRENT_USER, r'Control Panel\International')
+                l = _wr.QueryValueEx(k, 'LocaleName')[0]; _wr.CloseKey(k)
+                if l.startswith('ja'): return 'ja'
+            except Exception: pass
+        return 'en'
+    _L = _dlang()
+    def msg(ja, en=''): return ja if _L == 'ja' else (en or ja)
+# -----------------------------------------------------------------------------
+
 BAND_CODE  = {"160m":1,"80m":2,"40m":3,"20m":4,"15m":5,"10m":6}
 MODE_CODE  = {"CW":1,"SSB":2,"DIGI":3}
 POWER_CODE = {"QRP":1,"LOW":2,"HIGH":3}
@@ -22,17 +48,23 @@ def grid4_center(g):
     return round(lat,1), round(lon,1)
 
 def main():
-    ap = argparse.ArgumentParser(description="RBNペアCSV → ヒートマップJSON")
+    ap = argparse.ArgumentParser(
+        description=msg("RBNペアCSV → ヒートマップJSON",
+                        "RBN pair CSV → heatmap JSON"))
     ap.add_argument("--contest", required=True,
-                    help="コンテスト識別子 例: iaru, cqww_cw")
+                    help=msg("コンテスト識別子 例: iaru, cqww_cw",
+                             "Contest ID e.g.: iaru, cqww_cw"))
     ap.add_argument("--year", type=int, required=True,
-                    help="開催年 例: 2025")
+                    help=msg("開催年 例: 2025", "Contest year e.g.: 2025"))
     ap.add_argument("--input", nargs="+", default=None,
-                    help="入力CSVファイル (省略時: ~/heatmap/contest_logs/csv/{contest}_{year}_rbn_pairs.csv)")
+                    help=msg("入力CSVファイル (省略時: ~/heatmap/contest_logs/csv/{contest}_{year}_rbn_pairs.csv)",
+                             "Input CSV file (default: ~/heatmap/contest_logs/csv/{contest}_{year}_rbn_pairs.csv)"))
     ap.add_argument("--output", default=None,
-                    help="出力JSONファイル (省略時: ~/heatmap/data/{contest}_{year}_rbn.json)")
+                    help=msg("出力JSONファイル (省略時: ~/heatmap/data/{contest}_{year}_rbn.json)",
+                             "Output JSON file (default: ~/heatmap/data/{contest}_{year}_rbn.json)"))
     ap.add_argument("--time-resolution", type=int, default=10,
-                    help="時間解像度（分）デフォルト: 10")
+                    help=msg("時間解像度（分）デフォルト: 10",
+                             "Time resolution in minutes (default: 10)"))
     args = ap.parse_args()
 
     try:
@@ -40,7 +72,8 @@ def main():
         from contest_utils import validate_contest, rbn_pairs_csv, rbn_json, CONTEST_CFG
         validate_contest(args.contest)
         if not CONTEST_CFG[args.contest]["has_rbn"]:
-            print(f"情報: {args.contest} はRBNデータなし（SSBコンテスト）。スキップします。")
+            print(msg(f"情報: {args.contest} はRBNデータなし（SSBコンテスト）。スキップします。",
+                      f"Info: {args.contest} has no RBN data (SSB contest). Skipping."))
             return
         _in  = [rbn_pairs_csv(args.contest, args.year)]
         _out = rbn_json(args.contest, args.year)
@@ -60,10 +93,10 @@ def main():
     total_rows = 0
 
     for csv_path in inputs:
-        print(f"読み込み: {csv_path}")
+        print(msg(f"読み込み: {csv_path}", f"Loading: {csv_path}"))
         with open(csv_path, newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
-        print(f"  {len(rows)} 行")
+        print(f"  {len(rows)} " + msg("行", "rows"))
         total_rows += len(rows)
 
         for p in rows:
@@ -85,7 +118,6 @@ def main():
             pw = POWER_CODE.get(p.get("power_tx","").upper(), 0)
 
             utc_min = int(p.get("utc_min", 0))
-            # utc_day フィールドがあれば使用（48h対応）、なければ0（旧CSV互換）
             utc_day = int(p.get("utc_day", 0))
             t_step  = (utc_day * 1440 + int(p["utc_hour"])*60 + utc_min) // res_min
 
@@ -112,11 +144,11 @@ def main():
         json.dump({"meta": meta, "grids": grid_meta, "records": records},
                   f, separators=(",",":"))
 
-    print(f"\n入力合計: {total_rows} 行")
-    print(f"グリッド数: {len(grid_meta)}")
-    print(f"レコード数: {len(records)}")
-    print(f"最大spotter数/セル: {max_count}")
-    print(f"出力: {out}")
+    print(msg(f"\n入力合計: {total_rows} 行", f"\nTotal input rows: {total_rows}"))
+    print(msg(f"グリッド数: {len(grid_meta)}", f"Grid count: {len(grid_meta)}"))
+    print(msg(f"レコード数: {len(records)}", f"Record count: {len(records)}"))
+    print(msg(f"最大spotter数/セル: {max_count}", f"Max spotter count/cell: {max_count}"))
+    print(msg(f"出力: {out}", f"Output: {out}"))
 
 if __name__ == "__main__":
     main()

@@ -1,32 +1,24 @@
 #!/usr/bin/env python3
 """
-Step 4: グリッドあり局同士のQSOクロスチェック（曖昧マッチ・バンド訂正対応版）
+Step 4 approx: spotted_grids_approx.csv を使ったQSOクロスチェック
+
+通常版 (step4_crosscheck.py) との違い:
+  - approxグリッドDB（make_spotted_grids_approx.py出力）からグリッドを取得
+  - 少なくとも一方のグリッドが cty.dat 由来の場合のみ出力（通常版との重複除外）
+    ※「少なくとも一方」は両方cty.datの場合も含む
+  - 注釈ログ出力先: annotated_approx/ サブディレクトリ
+
+オプション・デフォルト値は step4_crosscheck.py と同一。
 
 使い方:
-  python3 step4_crosscheck.py --contest iaru --year 2025
-  python3 step4_crosscheck.py --contest cqww_cw --year 2024 \
+  python3 step4_crosscheck_approx.py --contest iaru --year 2019
+  python3 step4_crosscheck_approx.py --contest cqww_cw --year 2024 \
       --max-call-dist 2 --band-fix-window 15 --annotate-logs
-  python3 step4_crosscheck.py --contest iaru --year 2025 --ssn 68  # 手動上書き可
 
 入力:  ~/heatmap/contest_logs/raw/{contest}_{year}/*.txt
-出力:  ~/heatmap/contest_logs/csv/{contest}_{year}_qso_pairs.csv
-       ~/heatmap/contest_logs/csv/annotated/{contest}_{year}/*.txt  (--annotate-logs 時のみ)
-
-処理内容:
-  1. グリッドロケーターが有効なログのみ対象
-  2. 各ログのQSO行をパース（相手コールサイン・バンド・モード・UTC）
-  3. 相手局のログも存在し、かつそちらにもグリッドがある場合にペアとして記録
-  4. 時刻の照合: 同一バンド・モードで±time-tol分以内をマッチとする
-  5. 出力にはコールサインを含まず、グリッド・バンド・モード・UTC時間・距離のみ
-  6. [拡張] 曖昧コールサインマッチ: レーベンシュタイン距離1〜max_call_distで段階的検索
-     完全マッチ優先・距離が近いペアが優先。ダブりは最小距離のペアのみ採用。
-  7. [拡張] バンド訂正: 前後band_fix_window分以内のQSOのバンド多数決により、
-     自バンドより他バンドのQSOが多い場合は訂正してマッチを試みる。
-     自バンドと他バンドが同数の場合はAMBIGUOUSとしてスキップ（終了時に件数報告）。
-     SO2R・マルチオペ対応: バンドが飛ぶこと自体は誤記録とみなさない。
-  8. [拡張] --annotate-logs: 曖昧マッチ・バンド訂正でマッチしたQSO行に
-     $FUZZY:実コール(dist=N) / $BANDFIX:側(誤→正) を末尾付加したログを出力。
-     注釈のある行が1件以上あるファイルのみ出力。
+       ~/heatmap/contest_logs/rbn/{contest}_{year}_spotted_grids_approx.csv
+出力:  ~/heatmap/contest_logs/csv/{contest}_{year}_qso_pairs_approx.csv
+       ~/heatmap/contest_logs/csv/annotated_approx/{contest}_{year}/*.txt  (--annotate-logs 時)
 """
 
 import re, csv, math, argparse, sys
@@ -61,14 +53,7 @@ except ImportError:
 # --------------------------------------------------------------------------
 
 GRID_RE     = re.compile(r"^[A-R]{2}[0-9]{2}([A-X]{2})?$", re.IGNORECASE)
-GRID_FIELDS = ["GRID-LOCATOR","HQ-GRID-LOCATOR","MY-GRIDSQUARE","LOCATION-GRID","GRID"]
-TIME_TOL    = 15  # マッチ許容時間差（分）デフォルト、--time-tolで変更可
-
-# /QRP /MM /AM /P /M /数字 サフィックスを除去して基本コールを得る
-_STROKE_RE = re.compile(r'^(.+)/(?:QRP|MM|AM|P|M|\d)$', re.IGNORECASE)
-def normalize_call(cs):
-    m = _STROKE_RE.match(cs.upper().strip())
-    return m.group(1) if m else cs.upper().strip()
+TIME_TOL    = 15
 
 QSO_RE = re.compile(
     r"^(QSO:\s+\d+\s+\w+\s+\d{4}-\d{2}-\d{2}\s+\d{4}\s+"
@@ -81,14 +66,14 @@ QSO_PARSE_RE = re.compile(
     re.IGNORECASE
 )
 
-# ---------------------------------------------------------------------------
-# レーベンシュタイン距離
-# ---------------------------------------------------------------------------
+_STROKE_RE = re.compile(r'^(.+)/(?:QRP|MM|AM|P|M|\d)$', re.IGNORECASE)
+def normalize_call(cs):
+    m = _STROKE_RE.match(cs.upper().strip())
+    return m.group(1) if m else cs.upper().strip()
+
 def levenshtein(a, b):
-    if a == b:
-        return 0
-    if len(a) < len(b):
-        a, b = b, a
+    if a == b: return 0
+    if len(a) < len(b): a, b = b, a
     prev = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
         curr = [i]
@@ -97,9 +82,6 @@ def levenshtein(a, b):
         prev = curr
     return prev[-1]
 
-# ---------------------------------------------------------------------------
-# ユーティリティ
-# ---------------------------------------------------------------------------
 def freq_to_band(freq_khz):
     for lo, hi, name in [
         (1800, 2000, "160m"), (3500, 4000, "80m"), (7000, 7300, "40m"),
@@ -130,9 +112,6 @@ def gcd_km(lat1, lon1, lat2, lon2):
          math.sin((lon2 - lon1) * p / 2) ** 2)
     return round(2 * R * math.asin(math.sqrt(min(1, a))), 1)
 
-# ---------------------------------------------------------------------------
-# ログパース
-# ---------------------------------------------------------------------------
 def parse_header(text):
     result = {}
     for line in text.splitlines():
@@ -143,19 +122,7 @@ def parse_header(text):
             result[m.group(1).upper()] = m.group(2).strip()
     return result
 
-def get_grid(header):
-    for field in GRID_FIELDS:
-        if field in header:
-            parts = header[field].split()
-            if not parts:
-                continue
-            val = parts[0].upper()[:4]
-            if GRID_RE.match(val):
-                return val
-    return None
-
 def parse_qsos(text):
-    """QSOリストと、各QSOが元テキストの何行目(0-based)にあるかを返す"""
     qsos = []
     for lineno, line in enumerate(text.splitlines()):
         m = QSO_PARSE_RE.match(line.strip())
@@ -178,23 +145,33 @@ def parse_qsos(text):
                 "dt": dt,
                 "utc_hour": dt.hour, "utc_min": dt.minute, "utc_month": dt.month,
                 "band": band, "mode": mode,
-                "freq": freq,           # 周波数（バンド信頼性判定用）
+                "freq": freq,
                 "peer_call": m.group(8).upper(),
-                "lineno": lineno,       # 元テキスト行番号（注釈付加用）
+                "lineno": lineno,
             })
-        except:
+        except Exception:
             continue
     return qsos
 
-AMBIGUOUS = "AMBIGUOUS"  # 訂正候補が同数で決定不能
+def load_approx_grids(path):
+    grids = {}
+    with open(path, newline="", encoding="utf-8", errors="replace") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            call = row["callsign"].strip().upper()
+            g    = row["grid"].strip().upper()[:4]
+            if call and GRID_RE.match(g):
+                grids[call] = (
+                    g,
+                    row.get("power", "UNKNOWN").strip().upper(),
+                    row.get("grid_source", "?"),
+                )
+    return grids
 
-# ---------------------------------------------------------------------------
-# マッチング補助
-# ---------------------------------------------------------------------------
+AMBIGUOUS = "AMBIGUOUS"
+
 def try_match(call_a, qso_a, data_b, time_tol_min,
               band_override_a=None, band_override_b=None):
-    """qso_a に対して data_b の中からマッチするQSOを返す。
-    ストローク正規化も試みる。戻り値: (qso_b or None, stroke_b: bool)"""
     call_a_norm = normalize_call(call_a)
     band_a = band_override_a or qso_a["band"]
     for qso_b in data_b["qsos"]:
@@ -206,26 +183,14 @@ def try_match(call_a, qso_a, data_b, time_tol_min,
         else:
             stroke_b = False
         band_b = band_override_b or qso_b["band"]
-        if band_b != band_a:
-            continue
-        if qso_b["mode"] != qso_a["mode"]:
-            continue
-        if abs((qso_b["dt"] - qso_a["dt"]).total_seconds()) / 60 > time_tol_min:
-            continue
+        if band_b != band_a: continue
+        if qso_b["mode"] != qso_a["mode"]: continue
+        if abs((qso_b["dt"] - qso_a["dt"]).total_seconds()) / 60 > time_tol_min: continue
         return qso_b, stroke_b
     return None, False
 
-# ---------------------------------------------------------------------------
-# 注釈付きログ出力
-# ---------------------------------------------------------------------------
-def write_annotated_logs(logs, log_texts, annotations, out_dir, contest,
-                         subdir="annotated"):
-    """
-    annotations: {call: {lineno: "$TAG,..."}}
-    注釈がある行を1件以上含むファイルのみ出力。
-    subdir: 出力サブディレクトリ名（approx版は "annotated_approx" を指定）
-    """
-    ann_dir = out_dir / subdir / contest
+def write_annotated_logs(logs, log_texts, annotations, out_dir, contest):
+    ann_dir = out_dir / "annotated_approx" / contest
     ann_dir.mkdir(parents=True, exist_ok=True)
     written = 0
     for call, data in logs.items():
@@ -247,158 +212,148 @@ def write_annotated_logs(logs, log_texts, annotations, out_dir, contest,
         out_path.write_text("".join(out_lines), encoding="utf-8")
         written += 1
     print(msg(
-        f"注釈ログ出力: {written} ファイル → {ann_dir}",
-        f"Annotated logs written: {written} file(s) → {ann_dir}",
+        f"注釈ログ出力(approx): {written} ファイル → {ann_dir}",
+        f"Annotated logs (approx) written: {written} file(s) → {ann_dir}",
     ))
 
-# ---------------------------------------------------------------------------
-# main
-# ---------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser(
         description=msg(
-            "Cabrillo QSOクロスチェック（曖昧マッチ・バンド訂正対応）",
-            "Cabrillo QSO cross-check (fuzzy match + band correction)",
+            "approx版 Cabrillo QSOクロスチェック（cty.dat補完グリッド使用）",
+            "approx Cabrillo QSO cross-check (cty.dat estimated grids)",
         )
     )
     ap.add_argument("--contest", required=True,
-                    help=msg("コンテスト識別子 例: iaru, cqww_cw, cqwpx_ssb",
-                             "Contest ID e.g.: iaru, cqww_cw, cqwpx_ssb"))
+                    help=msg("コンテスト識別子 例: iaru, cqww_cw",
+                             "Contest ID e.g.: iaru, cqww_cw"))
     ap.add_argument("--year", type=int, required=True,
                     help=msg("開催年 例: 2025", "Year e.g.: 2025"))
-    ap.add_argument("--ssn", type=int, default=None,
-                    help=msg("開催月の月平均SSN（省略時: SN_m_tot_V2.0.txt から自動取得）",
-                             "Monthly SSN (default: auto from SN_m_tot_V2.0.txt)"))
+    ap.add_argument("--ssn", type=int, default=None)
     ap.add_argument("--raw-dir", default=None,
-                    help=msg("ログファイルのディレクトリ",
-                             "Log file directory"))
+                    help=msg("ログファイルのディレクトリ", "Log file directory"))
     ap.add_argument("--out-dir", default=None,
-                    help=msg("CSV・注釈ログ出力先ルート",
-                             "CSV / annotated log output root"))
-    ap.add_argument("--time-tol", type=int, default=15, metavar="MIN",
-                    help=msg("QSO時刻マッチの許容誤差（分） (デフォルト: 15)",
-                             "QSO time match tolerance in minutes (default: 15)"))
-    ap.add_argument("--max-call-dist", type=int, default=3, metavar="N",
-                    help=msg("曖昧コールサインマッチの最大レーベンシュタイン距離 (デフォルト: 3)",
-                             "Max Levenshtein distance for fuzzy callsign match (default: 3)"))
-    ap.add_argument("--band-fix-window", type=int, default=10, metavar="MIN",
-                    help=msg("バンド訂正判定の前後時間窓（分） (デフォルト: 10)",
-                             "Band-fix judgment window in minutes (default: 10)"))
-    ap.add_argument("--no-fuzzy", action="store_true",
-                    help=msg("曖昧マッチを無効化（完全マッチのみ）",
-                             "Disable fuzzy match (exact match only)"))
-    ap.add_argument("--no-band-fix", action="store_true",
-                    help=msg("バンド訂正を無効化", "Disable band correction"))
+                    help=msg("CSV出力先ルート", "CSV output root"))
+    ap.add_argument("--approx-grids", default=None,
+                    help=msg("approxグリッドDB（make_spotted_grids_approx.py出力）のパス",
+                             "approx grid DB path (make_spotted_grids_approx.py output)"))
+    ap.add_argument("--time-tol", type=int, default=15, metavar="MIN")
+    ap.add_argument("--max-call-dist", type=int, default=3, metavar="N")
+    ap.add_argument("--band-fix-window", type=int, default=10, metavar="MIN")
+    ap.add_argument("--no-fuzzy", action="store_true")
+    ap.add_argument("--no-band-fix", action="store_true")
     ap.add_argument("--annotate-logs", action="store_true",
-                    help=msg("曖昧マッチ・バンド訂正の注釈付きログを出力する",
-                             "Write annotated logs for fuzzy/band-fix matches"))
+                    help=msg("マッチ種別注釈付きログを annotated_approx/ に出力する",
+                             "Write annotated logs to annotated_approx/"))
     args = ap.parse_args()
 
-    # contest_utilsでパス解決
     _resolve_ssn = None
     _start_dt = None
     try:
-        from contest_utils import validate_contest, raw_log_dir, qso_pairs_csv, resolve_ssn as _resolve_ssn, get_contest_dates
+        from contest_utils import (validate_contest, raw_log_dir, get_contest_dates,
+                                   spotted_grids_approx_csv, qso_pairs_approx_csv,
+                                   resolve_ssn as _resolve_ssn)
         validate_contest(args.contest)
-        _raw_dir = raw_log_dir(args.contest, args.year)
-        _out_csv = qso_pairs_csv(args.contest, args.year)
+        _raw_dir  = raw_log_dir(args.contest, args.year)
+        _grids    = spotted_grids_approx_csv(args.contest, args.year)
+        _out_csv  = qso_pairs_approx_csv(args.contest, args.year)
         _start_dt, _ = get_contest_dates(args.contest, args.year)
     except (ImportError, ValueError) as e:
         print(msg(f"警告: contest_utils未使用 ({e})",
                   f"Warning: contest_utils not available ({e})"))
-        _raw_dir = Path.home() / "heatmap" / "contest_logs" / "raw" / f"{args.contest}_{args.year}"
-        _out_csv = Path.home() / "heatmap" / "contest_logs" / "csv" / f"{args.contest}_{args.year}_qso_pairs.csv"
+        cid = f"{args.contest}_{args.year}"
+        _raw_dir = Path.home()/"heatmap"/"contest_logs"/"raw"/cid
+        _grids   = Path.home()/"heatmap"/"contest_logs"/"rbn"/f"{cid}_spotted_grids_approx.csv"
+        _out_csv = Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_qso_pairs_approx.csv"
 
-    raw_dir = Path(args.raw_dir) if args.raw_dir else _raw_dir
-    csv_dir = Path(args.out_dir) if args.out_dir else _out_csv.parent
-    out_csv = csv_dir / _out_csv.name if not args.out_dir else csv_dir / _out_csv.name
+    raw_dir = Path(args.raw_dir)       if args.raw_dir      else _raw_dir
+    grids_p = Path(args.approx_grids)  if args.approx_grids else _grids
+    csv_dir = Path(args.out_dir)       if args.out_dir      else _out_csv.parent
+    out_csv = csv_dir / _out_csv.name
     csv_dir.mkdir(parents=True, exist_ok=True)
 
-    # SSN解決（contest_utils.resolve_ssn を優先、未使用時はSSN=0）
+    global TIME_TOL
+    TIME_TOL = args.time_tol
+
+    if not grids_p.exists():
+        print(msg(f"エラー: approxグリッドDBが見つかりません: {grids_p}",
+                  f"Error: approx grid DB not found: {grids_p}"))
+        print(msg("  make_spotted_grids_approx.py を先に実行してください。",
+                  "  Run make_spotted_grids_approx.py first."))
+        return
+
     if _resolve_ssn:
         ssn = _resolve_ssn(args.contest, args.year,
                            ssn_override=args.ssn,
                            script_dir=Path(__file__).parent)
     else:
         ssn = args.ssn if args.ssn is not None else 0
-        if ssn == 0:
-            print(msg("警告: contest_utils未使用のためSSN=0を使用します。",
-                      "Warning: contest_utils not available; using SSN=0."))
 
-    # TIME_TOLをオプション値で上書き
-    global TIME_TOL
-    TIME_TOL = args.time_tol
+    approx_grids = load_approx_grids(grids_p)
+    print(msg(f"approxグリッドDB: {len(approx_grids)} 局",
+              f"approx grid DB: {len(approx_grids)} stations"))
 
     log_files = sorted(raw_dir.glob("*.txt"))
     if not log_files:
-        print(msg(f"ログファイルが見つかりません: {raw_dir}",
-                  f"No log files found: {raw_dir}"))
+        print(msg(f"エラー: ログなし: {raw_dir}",
+                  f"Error: no logs found: {raw_dir}"))
         return
-    print(msg(f"ログファイル数: {len(log_files)}",
-              f"Log files: {len(log_files)}"))
+    print(msg(f"ログ数: {len(log_files)}", f"Log files: {len(log_files)}"))
 
-    # ---- ログ読み込み -------------------------------------------------------
-    logs = {}
-    log_texts = {}  # call → 元テキスト（注釈出力用）
+    logs     = {}
+    log_texts = {}
+
     for path in log_files:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text   = path.read_text(encoding="utf-8", errors="replace")
         header = parse_header(text)
-        call = header.get("CALLSIGN", "").upper()
-        if not call:
+        call   = header.get("CALLSIGN", "").upper().strip()
+        if not call or call not in approx_grids:
             continue
-        grid = get_grid(header)
-        if not grid:
-            continue
-        power = header.get("CATEGORY-POWER", "UNKNOWN").upper()
-        if power not in ("HIGH", "LOW", "QRP"):
-            power = "UNKNOWN"
+        grid, power, src = approx_grids[call]
         qsos = parse_qsos(text)
         if not qsos:
             continue
         logs[call] = {
             "grid": grid, "power": power, "qsos": qsos,
-            "filename": path.name,
+            "filename": path.name, "grid_source": src,
         }
         if args.annotate_logs:
             log_texts[call] = text
 
-    print(msg(f"グリッドあり有効ログ: {len(logs)} 局",
-              f"Valid logs with grid: {len(logs)} stations"))
+    print(msg(f"approxDBにありQSOあり: {len(logs)} 局",
+              f"In approx DB with QSOs: {len(logs)} stations"))
 
-    # ---- ストローク正規化インデックス ----------------------------------------
+    cty_stations = {c for c, d in logs.items() if d["grid_source"] != "log"}
+    if not cty_stations:
+        print(msg("cty.dat由来グリッドなし → マッチングをスキップ",
+                  "No cty.dat-derived grids → skipping matching"))
+
     call_norm_to_raw = {}
     for raw_call in logs:
         norm = normalize_call(raw_call)
         call_norm_to_raw.setdefault(norm, []).append(raw_call)
 
-    # ---- 曖昧マッチ用インデックス -------------------------------------------
     known_calls = list(logs.keys())
 
     def find_fuzzy_candidates(peer_call, max_dist):
         results = []
         peer_len = len(peer_call)
         for kc in known_calls:
-            if len(kc) != peer_len:
-                continue
+            if len(kc) != peer_len: continue
             d = levenshtein(peer_call, kc)
             if 1 <= d <= max_dist:
                 results.append((d, kc))
         results.sort()
         return results
 
-    # ---- マッチング ---------------------------------------------------------
-    pairs = []
-    seen = set()
+    pairs     = []
+    seen      = set()
     matched_qsos = set()
-    annotations = defaultdict(dict)
+    annotations  = defaultdict(dict)
 
     stats = {
-        "exact": 0,
-        "stroke": 0,
+        "exact": 0, "stroke": 0,
         "fuzzy_by_dist": defaultdict(int),
-        "band_fix_a": 0,
-        "band_fix_b": 0,
-        "band_fix_ambiguous": 0,
+        "band_fix_a": 0, "band_fix_b": 0, "band_fix_ambiguous": 0,
     }
 
     def add_annotation(call, lineno, tag):
@@ -419,11 +374,18 @@ def main():
         else:
             del annotations[call][lineno]
 
+    def is_cty(call):
+        src = logs[call]["grid_source"] if call in logs else "log"
+        return src != "log"
+
     def record_pair(call_a, data_a, qso_a,
                     call_b, data_b, qso_b,
                     call_dist, band_fix_tag,
                     orig_band_a=None, orig_band_b=None,
                     stroke_a=False, stroke_b=False):
+        if not is_cty(call_a) and not is_cty(call_b):
+            return False
+
         band_a_orig = orig_band_a if orig_band_a else qso_a["band"]
         band_b_orig = orig_band_b if orig_band_b else qso_b["band"]
         dt_pair = tuple(sorted([qso_a["dt"].strftime("%Y%m%d%H%M"),
@@ -495,11 +457,10 @@ def main():
 
         return True
 
-    print(msg("Pass 1: 完全マッチ処理中...",
-              "Pass 1: exact matching..."))
+    print(msg("Pass 1: 完全マッチ処理中...", "Pass 1: exact matching..."))
     call_list = list(logs.items())
 
-    for call_a, data_a in call_list:
+    for call_a, data_a in (call_list if cty_stations else []):
         for qi_a, qso_a in enumerate(data_a["qsos"]):
             peer = qso_a["peer_call"]
             stroke_a = False
@@ -528,7 +489,7 @@ def main():
     print(msg("Pass 2: バンド訂正・曖昧マッチ処理中...",
               "Pass 2: band-fix and fuzzy matching..."))
 
-    for call_a, data_a in call_list:
+    for call_a, data_a in (call_list if cty_stations else []):
         for qi_a, qso_a in enumerate(data_a["qsos"]):
             if (call_a, qso_a["lineno"]) in matched_qsos:
                 continue
@@ -561,47 +522,37 @@ def main():
                             stroke_b_cand = True
                         else:
                             stroke_b_cand = False
-                        if (call_b_p2, qso_b_cand["lineno"]) in matched_qsos:
-                            continue
-                        if qso_b_cand["mode"] != qso_a["mode"]:
-                            continue
-                        if abs((qso_b_cand["dt"] - qso_a["dt"]).total_seconds()) / 60 > TIME_TOL:
-                            continue
-                        if qso_b_cand["band"] == qso_a["band"]:
-                            continue
+                        if (call_b_p2, qso_b_cand["lineno"]) in matched_qsos: continue
+                        if qso_b_cand["mode"] != qso_a["mode"]: continue
+                        if abs((qso_b_cand["dt"] - qso_a["dt"]).total_seconds()) / 60 > TIME_TOL: continue
+                        if qso_b_cand["band"] == qso_a["band"]: continue
 
                         fix_side = None
                         correct_band = None
 
                         a_support = sum(
                             1 for j, o in enumerate(data_a["qsos"])
-                            if j != qi_a
-                            and o["band"] == qso_a["band"]
+                            if j != qi_a and o["band"] == qso_a["band"]
                             and abs((o["dt"] - qso_a["dt"]).total_seconds()) <= window_sec
                         )
                         b_support = sum(
                             1 for j, o in enumerate(data_b["qsos"])
-                            if j != qi_b
-                            and o["band"] == qso_b_cand["band"]
+                            if j != qi_b and o["band"] == qso_b_cand["band"]
                             and abs((o["dt"] - qso_b_cand["dt"]).total_seconds()) <= window_sec
                         )
 
                         if a_support != b_support:
                             if b_support > a_support:
-                                fix_side = "A"
-                                correct_band = qso_b_cand["band"]
+                                fix_side = "A"; correct_band = qso_b_cand["band"]
                             else:
-                                fix_side = "B"
-                                correct_band = qso_a["band"]
+                                fix_side = "B"; correct_band = qso_a["band"]
                         else:
                             a_round = (qso_a["freq"] % 1000 == 0)
                             b_round = (qso_b_cand["freq"] % 1000 == 0)
                             if a_round and not b_round:
-                                fix_side = "A"
-                                correct_band = qso_b_cand["band"]
+                                fix_side = "A"; correct_band = qso_b_cand["band"]
                             elif b_round and not a_round:
-                                fix_side = "B"
-                                correct_band = qso_a["band"]
+                                fix_side = "B"; correct_band = qso_a["band"]
                             else:
                                 stats["band_fix_ambiguous"] += 1
                                 if args.annotate_logs:
@@ -609,8 +560,7 @@ def main():
                                         (call_a, qso_a["lineno"],
                                          f"BANDFIX_AMBIGUOUS:A(*{qso_a['band']}->{qso_b_cand['band']})"))
 
-                        if fix_side is None:
-                            continue
+                        if fix_side is None: continue
 
                         if fix_side == "A":
                             orig_band_a = qso_a["band"]
@@ -619,8 +569,7 @@ def main():
                                            call_b_p2, data_b, qso_b_cand, 0, "A",
                                            orig_band_a=orig_band_a,
                                            stroke_a=stroke_a_p2, stroke_b=stroke_b_cand):
-                                stats["band_fix_a"] += 1
-                                fixed = True
+                                stats["band_fix_a"] += 1; fixed = True
                             qso_a["band"] = orig_band_a
                         else:
                             orig_band_b = qso_b_cand["band"]
@@ -629,11 +578,9 @@ def main():
                                            call_b_p2, data_b, qso_b_cand, 0, "B",
                                            orig_band_b=orig_band_b,
                                            stroke_a=stroke_a_p2, stroke_b=stroke_b_cand):
-                                stats["band_fix_b"] += 1
-                                fixed = True
+                                stats["band_fix_b"] += 1; fixed = True
                             qso_b_cand["band"] = orig_band_b
-                        if fixed:
-                            break
+                        if fixed: break
 
                 if args.annotate_logs and not fixed:
                     for ac, al, at in _pending_ambiguous:
@@ -667,14 +614,15 @@ def main():
                     if (ac, al) not in matched_qsos:
                         add_annotation(ac, al, at)
 
-    # ---- 統計表示 -----------------------------------------------------------
-    fuzzy_total = sum(stats["fuzzy_by_dist"].values())
+    fuzzy_total    = sum(stats["fuzzy_by_dist"].values())
     band_fix_total = stats["band_fix_a"] + stats["band_fix_b"]
     ambiguous_total = stats["band_fix_ambiguous"]
     total = len(pairs)
 
-    print(msg(f"\nクロスチェック済みQSOペア: {total}",
-              f"\nCross-checked QSO pairs: {total}"))
+    print(msg(
+        f"\napprox QSOペア（cty.dat由来グリッドを含むもの）: {total}",
+        f"\napprox QSO pairs (includes cty.dat-derived grids): {total}",
+    ))
     print(msg(f"使用SSN: {ssn}", f"SSN used: {ssn}"))
     print(msg("\n=== マッチ統計 ===", "\n=== Match statistics ==="))
     print(msg(f"  完全マッチ (dist=0):          {stats['exact']:6d}",
@@ -711,16 +659,7 @@ def main():
             f"\n=== Band fix AMBIGUOUS (equal support — skipped) ===",
         ))
         print(msg(f"  件数: {ambiguous_total}", f"  Count: {ambiguous_total}"))
-        print(msg(
-            f"  ※ これらのQSOはバンド訂正を試みましたが前後window内で\n"
-            f"    自バンドと候補バンドのQSO数が同数だったため訂正不可でした。\n"
-            f"    --band-fix-window を広げるか、該当ログを手動確認してください。",
-            f"  These QSOs could not be band-corrected because support counts\n"
-            f"  were equal within the window. Widen --band-fix-window or\n"
-            f"  inspect the logs manually.",
-        ))
 
-    # ---- CSV出力 ------------------------------------------------------------
     fieldnames = [
         "grid_tx", "grid_rx", "band", "mode", "utc_hour", "utc_min", "utc_month",
         "utc_day", "distance_km", "ssn", "tier", "source", "lon_tx",
@@ -732,44 +671,11 @@ def main():
         w.writerows(pairs)
     print(msg(f"\nCSV出力: {out_csv}", f"\nCSV written: {out_csv}"))
 
-    # ---- バンド・モード別統計 -----------------------------------------------
-    for label_ja, label_en, key in [
-        ("バンド", "Band", "band"),
-        ("モード", "Mode", "mode"),
-    ]:
+    for label_ja, label_en, key in [("バンド", "Band", "band"), ("モード", "Mode", "mode")]:
         print(msg(f"\n=== {label_ja}別 ===", f"\n=== By {label_en} ==="))
-        for v, c in sorted(Counter(p[key] for p in pairs).items(),
-                           key=lambda x: -x[1]):
+        for v, c in sorted(Counter(p[key] for p in pairs).items(), key=lambda x: -x[1]):
             print(f"  {v:6s}: {c:6d}")
 
-    if fuzzy_total > 0:
-        print(msg(f"\n=== 曖昧マッチ内訳（dist別・バンド別） ===",
-                  f"\n=== Fuzzy match breakdown (by dist / band) ==="))
-        for d in range(1, args.max_call_dist + 1):
-            sub = [p for p in pairs if p["call_dist"] == d]
-            if not sub:
-                continue
-            print(msg(f"  dist={d} ({len(sub)}件)", f"  dist={d} ({len(sub)} pairs)"))
-            for v, c in sorted(Counter(p["band"] for p in sub).items(),
-                               key=lambda x: -x[1]):
-                print(f"    {v:6s}: {c:4d}")
-
-    if band_fix_total > 0:
-        print(msg(f"\n=== バンド訂正内訳 ===", f"\n=== Band fix breakdown ==="))
-        for side_ja, side_en, tag in [
-            ("A側", "Side A", "A"),
-            ("B側", "Side B", "B"),
-        ]:
-            sub = [p for p in pairs if p["band_fix"] == tag]
-            if not sub:
-                continue
-            print(msg(f"  {side_ja}訂正 ({len(sub)}件) バンド別:",
-                      f"  {side_en} fix ({len(sub)} pairs) by band:"))
-            for v, c in sorted(Counter(p["band"] for p in sub).items(),
-                               key=lambda x: -x[1]):
-                print(f"    {v:6s}: {c:4d}")
-
-    # ---- 注釈ログ出力 -------------------------------------------------------
     if args.annotate_logs:
         write_annotated_logs(logs, log_texts, annotations, csv_dir,
                              f"{args.contest}_{args.year}")

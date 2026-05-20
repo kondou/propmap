@@ -25,10 +25,13 @@ SOFTWARE.
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>HF Propagation Heatmap</title>
+<title>PropMap v1.0.1</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
+@keyframes _blink { 0%{opacity:1} 71.43%{opacity:0.15} 100%{opacity:1} }
+.blink { animation: _blink 700ms linear infinite; }
+@keyframes _ka { 0%{transform:translateX(0)} 50%{transform:translateX(0.001px)} 100%{transform:translateX(0)} }
 body { background: #111; color: #ccc; font-family: system-ui, sans-serif; font-size: 13px;
   display:flex; flex-direction:column; overflow:hidden; }
 #app { flex:1; display:flex; flex-direction:column; padding:6px; min-height:0; overflow:hidden; }
@@ -121,6 +124,7 @@ canvas#cv { display:block; cursor:crosshair; }
 </style>
 </head>
 <body>
+<div id="_ka" style="position:fixed;bottom:0;right:0;width:2px;height:2px;opacity:0.004;background:#888;animation:_ka 0.25s linear infinite;pointer-events:none;will-change:transform;" aria-hidden="true"></div>
 <div id="ui-tooltip"></div>
 <div id="app">
 <div id="main-row" style="flex:1;min-height:0;display:flex;gap:8px;">
@@ -135,9 +139,9 @@ canvas#cv { display:block; cursor:crosshair; }
     <div id="map-bright" class="tt" data-tip-key="map_bright" data-tip-above="1" style="position:absolute;bottom:8px;left:8px;
       background:rgba(0,0,0,0.70);border:1px solid #334;border-radius:4px;
       padding:4px 8px;font-size:10px;color:#aaa;pointer-events:auto;line-height:1.8;">
-      <label style="color:#aaa;font-size:10px;">Map</label>
+      <div><label style="color:#aaa;font-size:10px;">Map</label>
       <input type="range" id="sld-bright" min="50" max="300" value="150" step="10" style="width:80px;vertical-align:middle;">
-      <span id="lbl-bright" style="font-size:10px;color:#aaa;">150%</span>
+      <span id="lbl-bright" style="font-size:10px;color:#aaa;">150%</span></div>
     </div>
     <div id="overlay-info" style="position:absolute;bottom:8px;right:8px;cursor:pointer;">
       <div id="ov-offscreen" class="tt" data-tip-ov="qso" style="font-size:16px;font-weight:bold;text-align:right;
@@ -153,6 +157,8 @@ canvas#cv { display:block; cursor:crosshair; }
     <div id="radius-ctrl" style="position:absolute;right:8px;
       background:rgba(0,0,0,0.70);border:1px solid #334;border-radius:4px;
       padding:3px 8px;display:flex;align-items:center;gap:6px;pointer-events:auto;">
+      <input type="checkbox" id="chk-pan" style="vertical-align:middle;cursor:pointer;margin:0 3px 0 0;">
+      <label for="chk-pan" style="color:#aaa;font-size:10px;cursor:pointer;margin-right:8px;">Pan</label>
       <label style="color:#aaa;font-size:10px;white-space:nowrap;">R</label>
       <input type="range" id="sld-radius" min="0" max="22" value="10" step="1"
         style="width:100px;vertical-align:middle;"
@@ -174,6 +180,12 @@ canvas#cv { display:block; cursor:crosshair; }
         <span style="display:inline-block;width:16px;flex-shrink:0;"></span>
         <label class="year-item tt" style="flex-shrink:0;" data-tip-key="chk_rbn">
           <input type="checkbox" id="chk-rbn"> RBN
+        </label>
+        <label class="year-item" style="flex-shrink:0;" title="est. QSO (cty.dat推定グリッド)">
+          <input type="checkbox" id="chk-approx"> est. QSO
+        </label>
+        <label class="year-item" style="flex-shrink:0;" title="est. RBN (cty.dat推定グリッド)">
+          <input type="checkbox" id="chk-rbn-approx"> est. RBN
         </label>
         <button id="btn-doc" class="tt" data-tip-key="btn_doc" onclick="window.open(isJa?'PropMap_UserGuide_ja.html':'PropMap_UserGuide_en.html','_blank')">Doc</button>
         <span id="status" style="font-size:11px;color:#aaa;margin-left:auto;"></span>
@@ -319,15 +331,21 @@ async function loadJSON(paths){
 // ズーム倍率: 1.15 (変更候補: 1.3=旧値, 2.0=旧クリック倍率)
 const ZOOM_FACTOR=1.15;
 // 太陽位置計算（UTC分から太陽の赤緯・経度を計算）
+let _spKey='',_spData=[];
 function solarPosition(utcMinutes){
   // IARU=7月中旬(day≒196), CQ WW CW=11月末(day≒330), CQ WW SSB=10月末(day≒304)
-  // contestCfgから判定
   const key=document.getElementById('sel-contest').value;
-  const dayOfYear=key==='cqww_cw'?330:key==='cqww_ssb'?304:
-                  key==='cqwpx_cw'?140:key==='cqwpx_ssb'?70:196; // iaru=196
-  const declDeg=23.45*Math.sin((360/365*(dayOfYear-81))*Math.PI/180);
-  const sunLon=-(utcMinutes/60-12)*15; // 正午に経度0
-  return{lat:declDeg, lon:((sunLon+180)%360+360)%360-180};
+  if(key!==_spKey){
+    _spKey=key;
+    const day=key==='cqww_cw'?330:key==='cqww_ssb'?304:
+              key==='cqwpx_cw'?140:key==='cqwpx_ssb'?70:196;
+    const decl=23.45*Math.sin((360/365*(day-81))*Math.PI/180);
+    _spData=Array.from({length:1440},(_,m)=>{
+      const l=-(m/60-12)*15;
+      return{lat:decl,lon:((l+180)%360+360)%360-180};
+    });
+  }
+  return _spData[(utcMinutes|0)%1440];
 }
 
 // 大圏距離(km)計算
@@ -359,35 +377,32 @@ function syncRadiusSlider(){
 let CX=-0.8,CY=52.5,QX=-0.8,QY=52.5;
 const CX0=-0.8,CY0=52.5;
 let radiusKm=SCALE_DEFAULT;
+let viewS=1,viewTX=0,viewTY=0;
+let dragStartTX=0,dragStartTY=0;
 let allData=null,worldFeatures=null,animTimer=null,rtTimer=null,chartRafId=null,_rtRafId=null;
 let _offscreen=null,_offscreenKey=null; // 地形図+ベアリング+リングのキャッシュ
 // 点滅: 明→暗0.5秒、暗→明0.2秒の非対称サイクル
-let _blinkAlpha=1.0,_blinkRaf=null,_blinkLastTs=null,_blinkGen=0;
+let _blinkAlpha=1.0,_blinkRaf=null,_blinkLastTs=null,_blinkDir=-1;
 const BLINK_FADE=500,BLINK_RISE=200; // ms
-function _blinkLoop(ts,gen){
-  if(gen!==_blinkGen)return;
-  if(_blinkLastTs===null)_blinkLastTs=ts;
-  const dt=Math.min(ts-_blinkLastTs,100);_blinkLastTs=ts;
-  if(!_blinkLoop._dir)_blinkLoop._dir=-1;
-  _blinkAlpha+=_blinkLoop._dir*dt/(_blinkLoop._dir>0?BLINK_RISE:BLINK_FADE);
-  if(_blinkAlpha<=0.15){_blinkAlpha=0.15;_blinkLoop._dir=1;}
-  if(_blinkAlpha>=1.0){_blinkAlpha=1.0;_blinkLoop._dir=-1;}
+function _blinkTick(){
+  const now=performance.now();
+  if(_blinkLastTs===null)_blinkLastTs=now;
+  const dt=Math.min(now-_blinkLastTs,100);_blinkLastTs=now;
+  _blinkAlpha+=_blinkDir*dt/(_blinkDir>0?BLINK_RISE:BLINK_FADE);
+  if(_blinkAlpha<=0.15){_blinkAlpha=0.15;_blinkDir=1;}
+  if(_blinkAlpha>=1.0){_blinkAlpha=1.0;_blinkDir=-1;}
   _redrawCellsOnly();
-  const ovOff=document.getElementById('ov-offscreen');
-  if(ovOff&&ovOff._blink)ovOff.querySelectorAll('.blink').forEach(el=>el.style.opacity=_blinkAlpha);
-  const ovRbn=document.getElementById('ov-rbn-stat');
-  if(ovRbn&&ovRbn._blink)ovRbn.querySelectorAll('.blink').forEach(el=>el.style.opacity=_blinkAlpha);
-  _blinkRaf=requestAnimationFrame(ts2=>_blinkLoop(ts2,gen));
 }
 let _blinkCellCache=null;
 let _arrowBlink={raf:null,gen:0,alphas:[]};
 let _arrowCache=null;
 function _redrawCellsOnly(){
   if(!_blinkCellCache||!_offscreen||SZ===0)return;
-  const{cx2,cy2,R,entries,grids}=_blinkCellCache;
+  const{entries,grids,rbnEnabled,rbnCount,rbnMaxC,rbnGrids,rxCount:qsoCount}=_blinkCellCache;
+  const dcx=SZ/2,dcy=SZ/2,dR=SZ/2-4;
   c2.clearRect(0,0,SZ,SZ);
   c2.save();
-  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);c2.clip();
+  c2.beginPath();c2.arc(dcx,dcy,dR,0,Math.PI*2);c2.clip();
   c2.fillStyle='#000';c2.fillRect(0,0,SZ,SZ);
   c2.drawImage(_offscreen,0,0);
   c2.globalAlpha=_blinkAlpha;
@@ -396,12 +411,10 @@ function _redrawCellsOnly(){
     c2.fillStyle=col;
     if(drawCell(meta.lat,meta.lon))c2.fill();
   }
-  // RBNのみセル（QSOなし）
-  if(_blinkCellCache.rbnEnabled&&_blinkCellCache.rbnCount){
-    const{rbnCount,rbnMaxC,rbnGrids,rxCount:qsoCount}=_blinkCellCache;
+  if(rbnEnabled&&rbnCount){
     for(const[rx4,cnt]of Object.entries(rbnCount)){
       if(rx4 in qsoCount)continue;
-      const meta=rbnGrids[rx4]||grids[rx4];if(!meta)continue;
+      const meta=(rbnGrids&&rbnGrids[rx4])||grids[rx4];if(!meta)continue;
       const col=rbnColor(cnt/rbnMaxC);if(!col)continue;
       c2.fillStyle=col;
       if(drawCell(meta.lat,meta.lon))c2.fill();
@@ -410,31 +423,35 @@ function _redrawCellsOnly(){
   c2.globalAlpha=1.0;
   c2.restore();
   // 外周円
-  c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);
+  c2.beginPath();c2.arc(dcx,dcy,dR,0,Math.PI*2);
   c2.strokeStyle='rgba(255,255,255,0.20)';c2.lineWidth=1.5;c2.stroke();
-  // 中心マーカー
-  const cp=proj([CX,CY]);
-  if(cp){
-    c2.globalAlpha=centerLabelAlpha;
-    c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
-    c2.fillStyle='#ee4444';c2.fill();
-    c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
-    c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';c2.textBaseline='middle';
-    c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
-    c2.globalAlpha=1.0;
-  }
-  if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
-    const qp=proj([QX,QY]);
-    if(qp){c2.beginPath();c2.arc(qp[0],qp[1],4,0,Math.PI*2);
-      c2.fillStyle='#4af';c2.fill();c2.strokeStyle='#fff';c2.lineWidth=1;c2.stroke();}
+  // 中心マーカー: パンモードかつ移動中は非表示
+  const _panActive=document.getElementById('chk-pan')?.checked&&(viewTX!==0||viewTY!==0||viewS!==1);
+  if(!_panActive){
+    const cp=proj([CX,CY]);
+    if(cp){
+      c2.globalAlpha=centerLabelAlpha;
+      c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
+      c2.fillStyle='#ee4444';c2.fill();
+      c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
+      c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';c2.textBaseline='middle';
+      c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
+      c2.globalAlpha=1.0;
+    }
+    if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
+      const qp=proj([QX,QY]);
+      if(qp){c2.beginPath();c2.arc(qp[0],qp[1],4,0,Math.PI*2);
+        c2.fillStyle='#4af';c2.fill();c2.strokeStyle='#fff';c2.lineWidth=1;c2.stroke();}
+    }
   }
   // N/E/S/W
   c2.textAlign='center';c2.textBaseline='middle';
   c2.fillStyle='rgba(255,255,255,0.30)';c2.font='10px sans-serif';
-  [['N',cx2,10],['E',SZ-8,cy2],['S',cx2,SZ-8],['W',8,cy2]]
-    .forEach(([l,x,y])=>c2.fillText(l,x,y));
-  // 三角インジケーター（パネルより手前）
-  if(_arrowCache&&_arrowCache.length>0){
+  [[`N`,dcx,dcy-dR+10],[`E`,dcx+dR-8,dcy],[`S`,dcx,dcy+dR-8],[`W`,dcx-dR+8,dcy]]
+    .forEach(([l,x,y])=>{if(x>=0&&x<=SZ&&y>=0&&y<=SZ)c2.fillText(l,x,y);});
+  // 三角インジケーター（Panモードで地図移動中は非表示）
+  const _panActiveCells=document.getElementById('chk-pan')?.checked&&(viewTX!==0||viewTY!==0||viewS!==1);
+  if(!_panActiveCells&&_arrowCache&&_arrowCache.length>0){
     const alphas=_arrowBlink.alphas;
     _drawArrowsOnCanvas(_arrowCache,alphas&&alphas.length===_arrowCache.length?alphas:null);
   }
@@ -453,6 +470,9 @@ function bandColorAlpha(b,a){
   return`rgba(${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},${a})`;
 }
 const BAND_NAMES={1:'160m',2:'80m',3:'40m',4:'20m',5:'15m',6:'10m'};
+
+const APP_VERSION='1.0.1';
+document.title=`PropMap v${APP_VERSION}`;
 
 // i18n
 const isJa=/^ja\b/.test(navigator.language);
@@ -625,13 +645,14 @@ function buildProj(){
   }
   proj=d3.geoAzimuthalEquidistant()
     .rotate([-CX,-CY])
-    .scale((SZ/2-8)/(radiusKm/6371))
-    .translate([SZ/2,SZ/2]);
+    .scale((SZ/2-8)/(radiusKm/6371)*viewS)
+    .translate([SZ/2+viewTX,SZ/2+viewTY]);
 }
 
 function pixelToGeo(px,py){
-  const sc=(SZ/2-8)/(radiusKm/6371);
-  const x=(px-SZ/2)/sc,y=(py-SZ/2)/sc;
+  const sc=(SZ/2-8)/(radiusKm/6371)*viewS;
+  const tx=SZ/2+viewTX,ty=SZ/2+viewTY;
+  const x=(px-tx)/sc,y=(py-ty)/sc;
   const rho=Math.sqrt(x*x+y*y);
   if(rho<1e-10)return[CX,CY];
   if(rho>Math.PI)return null;
@@ -682,7 +703,9 @@ cv.addEventListener('mousedown',e=>{
   const rect=cv.getBoundingClientRect();
   dragStart={x:(e.clientX-rect.left)*(SZ/rect.width),
              y:(e.clientY-rect.top)*(SZ/rect.height)};
-  dragStartCX=CX; dragStartCY=CY; isDragging=false;
+  dragStartCX=CX; dragStartCY=CY;
+  dragStartTX=viewTX; dragStartTY=viewTY;
+  isDragging=false;
   e.preventDefault();
 });
 
@@ -694,16 +717,21 @@ cv.addEventListener('mousemove',e=>{
   const dx=px-dragStart.x,dy=py-dragStart.y;
   if(!isDragging&&Math.sqrt(dx*dx+dy*dy)<DRAG_THR)return;
   isDragging=true; cv.style.cursor='grabbing';
-  const sc=(SZ/2-8)/(radiusKm/6371);
-  const latRad=dragStartCY*Math.PI/180;
-  CX=((dragStartCX+(-dx/sc)*(180/Math.PI)/Math.cos(latRad)+180)%360+360)%360-180;
-  CY=Math.max(-85,Math.min(85,dragStartCY-(-dy/sc)*(180/Math.PI)));
-  if(!document.getElementById('chk-fixed').checked){QX=CX;QY=CY;}
-  const newGrid=geoToGrid4(CX,CY);
-  document.getElementById('inp-grid').value=newGrid;
-  // ドラッグで地図が動いたらApplyをハイライト
-  setApplyDirty(true);
-  drawMap();
+  if(document.getElementById('chk-pan')?.checked){
+    viewTX=dragStartTX+dx;
+    viewTY=dragStartTY+dy;
+    drawMap();
+  } else {
+    const sc=(SZ/2-8)/(radiusKm/6371);
+    const latRad=dragStartCY*Math.PI/180;
+    CX=((dragStartCX+(-dx/viewS/sc)*(180/Math.PI)/Math.cos(latRad)+180)%360+360)%360-180;
+    CY=Math.max(-85,Math.min(85,dragStartCY-(-dy/viewS/sc)*(180/Math.PI)));
+    if(!document.getElementById('chk-fixed').checked){QX=CX;QY=CY;}
+    const newGrid=geoToGrid4(CX,CY);
+    document.getElementById('inp-grid').value=newGrid;
+    setApplyDirty(true);
+    drawMap();
+  }
 });
 
 function endDrag(e){
@@ -720,8 +748,26 @@ let _wheelPending=false, _skipCharts=false, _chartDebounce=null;
 cv.addEventListener('wheel',e=>{
   if(!e.ctrlKey&&!e.metaKey)return;
   e.preventDefault();
-  // ZOOM_FACTOR=1.15 (変更候補: 1.3)
-  radiusKm=e.deltaY>0?Math.min(SCALE_MAX,radiusKm*ZOOM_FACTOR):Math.max(SCALE_MIN,radiusKm/ZOOM_FACTOR);
+  if(document.getElementById('chk-pan')?.checked){
+    // Panモード: 投影レベルzoom-to-cursor（ベクター品質）
+    const cx=e.offsetX,cy=e.offsetY;
+    // deltaY>0=ピンチクローズ/下スクロール=縮小
+    const factor=e.deltaY>0?1/ZOOM_FACTOR:ZOOM_FACTOR;
+    // 全球表示時（地球外周円がディスク内に収まる）がズームアウト限界
+    // globeR = scale*π; 条件: panOffset + globeR ≤ R → sMin = (R - panOffset)/(SZ/2-8) * radiusKm/(6371*π)
+    const panOffset=Math.sqrt(viewTX*viewTX+viewTY*viewTY);
+    const sMin=Math.max(1e-3,(SZ/2-4-panOffset)/(SZ/2-8)*radiusKm/(6371*Math.PI));
+    const newS=Math.max(sMin,Math.min(20,viewS*factor));
+    if(newS!==viewS){
+      viewTX=cx-SZ/2-(newS/viewS)*(cx-SZ/2-viewTX);
+      viewTY=cy-SZ/2-(newS/viewS)*(cy-SZ/2-viewTY);
+      viewS=newS;
+    }
+  } else {
+    // 通常モード: 投影スケール変更（radiusKm）
+    // ZOOM_FACTOR=1.15 (変更候補: 1.3)
+    radiusKm=e.deltaY>0?Math.min(SCALE_MAX,radiusKm*ZOOM_FACTOR):Math.max(SCALE_MIN,radiusKm/ZOOM_FACTOR);
+  }
   _skipCharts=true; // ズーム中はチャート更新をスキップ
   if(!_wheelPending){
     _wheelPending=true;
@@ -889,6 +935,10 @@ function drawLegendBar(canvasId, colorFn){
 // RBNデータ
 let allRbnData=null;
 let _rbnStepIndex=null;
+
+// approxデータ（cty.dat補完グリッドによる追加データ）
+let allApproxData=null;
+let allRbnApproxData=null;
 
 // ---- セル描画 ----------------------------------------------------------
 function drawCell(lat,lon){
@@ -1329,7 +1379,7 @@ function drawMap(skipBuildProj){
 
   const f=getFilters();
   const rxCount=queryHeatmap(f);
-  const maxC=allData?.meta?.max_count_per_cell||Math.max(1,...Object.values(rxCount));
+  const maxC=20;
   let visGrids=0,totalQSO=0;
 
   // 地形図・ベアリング・距離リングをオフスクリーンにキャッシュ
@@ -1338,9 +1388,10 @@ function drawMap(skipBuildProj){
   const distKmMap=+document.getElementById('sld-lon').value;
   const curStepKey=getQueryStep();
   const rtSecKey=rtTimer?Math.floor(Date.now()/1000):0; // RTモード中は秒単位で変化
-  const offKey=`${CX.toFixed(4)},${CY.toFixed(4)},${radiusKm},${SZ},${bright.toFixed(2)},${distKmMap},${curStepKey},${rtSecKey}`;
-  if(!_offscreen||_offscreenKey!==offKey){
-    _offscreen=new OffscreenCanvas(SZ,SZ);
+  const panChecked=document.getElementById('chk-pan')?.checked?1:0;
+  const offKey=`${CX.toFixed(4)},${CY.toFixed(4)},${radiusKm},${SZ},${bright.toFixed(2)},${distKmMap},${curStepKey},${rtSecKey},${viewS.toFixed(3)},${viewTX.toFixed(1)},${viewTY.toFixed(1)},${panChecked}`;
+  if(!_offscreen||_offscreen.width!==SZ||_offscreen.height!==SZ){_offscreen=new OffscreenCanvas(SZ,SZ);_offscreenKey=null;}
+  if(_offscreenKey!==offKey){
     const oc=_offscreen.getContext('2d');
     const opg=d3.geoPath(proj,oc);
     // グレイライン: strokeなし、fillの重ね塗りで昼夜境界を表現
@@ -1389,56 +1440,63 @@ function drawMap(skipBuildProj){
       }
       oc.beginPath();opg({type:'Feature',geometry:{type:'LineString',coordinates:pts}});oc.stroke();
     }
-    const lbls=['N','30','60','E','120','150','S','210','240','W','300','330'];
-    oc.fillStyle=`rgba(255,255,255,${(0.35*bright).toFixed(3)})`;oc.font='9px sans-serif';
-    oc.textAlign='center';oc.textBaseline='middle';
-    lbls.forEach((lbl,i)=>{
-      const brg=i*30*Math.PI/180,d=Math.min(radiusKm*0.92,19500)/6371;
-      const cx=CX*Math.PI/180,cy=CY*Math.PI/180;
-      const lat2=Math.asin(Math.sin(cy)*Math.cos(d)+Math.cos(cy)*Math.sin(d)*Math.cos(brg));
-      const lon2=cx+Math.atan2(Math.sin(brg)*Math.sin(d)*Math.cos(cy),Math.cos(d)-Math.sin(cy)*Math.sin(lat2));
-      const pt=proj([lon2*180/Math.PI,lat2*180/Math.PI]);
-      if(pt&&pt[0]>8&&pt[0]<SZ-8&&pt[1]>8&&pt[1]<SZ-8)oc.fillText(lbl,pt[0],pt[1]);
-    });
+    // ベアリングラベル（Panモード時は非表示）
+    if(!panChecked){
+      const lbls=['N','30','60','E','120','150','S','210','240','W','300','330'];
+      oc.fillStyle=`rgba(255,255,255,${(0.35*bright).toFixed(3)})`;oc.font='9px sans-serif';
+      oc.textAlign='center';oc.textBaseline='middle';
+      lbls.forEach((lbl,i)=>{
+        const brg=i*30*Math.PI/180,d=Math.min(radiusKm*0.92,19500)/6371;
+        const cx=CX*Math.PI/180,cy=CY*Math.PI/180;
+        const lat2=Math.asin(Math.sin(cy)*Math.cos(d)+Math.cos(cy)*Math.sin(d)*Math.cos(brg));
+        const lon2=cx+Math.atan2(Math.sin(brg)*Math.sin(d)*Math.cos(cy),Math.cos(d)-Math.sin(cy)*Math.sin(lat2));
+        const pt=proj([lon2*180/Math.PI,lat2*180/Math.PI]);
+        if(pt&&pt[0]>8&&pt[0]<SZ-8&&pt[1]>8&&pt[1]<SZ-8)oc.fillText(lbl,pt[0],pt[1]);
+      });
+    }
     // 地形図
     if(worldFeatures){
       oc.strokeStyle=`rgba(255,255,255,${(0.28*bright).toFixed(3)})`;oc.lineWidth=0.7;
       oc.beginPath();opg(worldFeatures);oc.stroke();
     }
-    // 距離リング
-    const ringSteps=[200,500,1000,2000,5000,10000];
-    const ringStep=ringSteps.find(s=>Math.floor(radiusKm/s)<=8)||10000;
-    oc.setLineDash([3,5]);oc.strokeStyle=`rgba(255,220,80,${(0.30*bright).toFixed(3)})`;oc.lineWidth=0.8;
-    for(let km=ringStep;km<=radiusKm;km+=ringStep){
-      const deg=km/111.32;if(deg>=175)continue; // 175度以上は投影端に近くなり外周円になるため除外
-      oc.beginPath();opg(d3.geoCircle().center([CX,CY]).radius(deg)());oc.stroke();
-      const lp=proj([CX,CY-deg+0.3]);
-      if(lp&&lp[0]>8&&lp[0]<SZ-8&&lp[1]>8&&lp[1]<SZ-8){
-        oc.setLineDash([]);
-        oc.fillStyle=`rgba(255,220,80,${(0.55*bright).toFixed(3)})`;oc.font='8px sans-serif';oc.textAlign='left';
-        oc.fillText(km.toLocaleString()+'km',lp[0]+3,lp[1]);
-        oc.setLineDash([3,5]);
-      }
-    }
-    oc.setLineDash([]);
-    // Dist円（フィルタ距離を水色の実線円で表示）
-    if(distKmMap>0&&distKmMap<=20000){
-      const distDeg=distKmMap/111.32;
-      if(distDeg<175){
-        oc.beginPath();
-        const opg2=d3.geoPath(proj,oc);
-        opg2(d3.geoCircle().center([CX,CY]).radius(distDeg)());
-        oc.strokeStyle=`rgba(100,200,255,${(0.7*bright).toFixed(3)})`;
-        oc.lineWidth=1.2;
-        oc.setLineDash([]);
-        oc.stroke();
-        const dp=proj([CX,CY-distDeg+0.3]);
-        if(dp&&dp[0]>8&&dp[0]<SZ-8&&dp[1]>8&&dp[1]<SZ-8){
-          oc.fillStyle=`rgba(100,200,255,${(0.85*bright).toFixed(3)})`;
-          oc.font='9px sans-serif';oc.textAlign='left';
-          oc.fillText(distKmMap.toLocaleString()+'km',dp[0]+3,dp[1]);
+    // 距離リング（Panモード時は非表示）
+    if(!panChecked){
+      const ringSteps=[200,500,1000,2000,5000,10000];
+      const ringStep=ringSteps.find(s=>Math.floor(radiusKm/s)<=8)||10000;
+      oc.setLineDash([3,5]);oc.strokeStyle=`rgba(255,220,80,${(0.30*bright).toFixed(3)})`;oc.lineWidth=0.8;
+      for(let km=ringStep;km<=radiusKm;km+=ringStep){
+        const deg=km/111.32;if(deg>=175)continue;
+        oc.beginPath();opg(d3.geoCircle().center([CX,CY]).radius(deg)());oc.stroke();
+        const lp=proj([CX,CY-deg+0.3]);
+        if(lp&&lp[0]>8&&lp[0]<SZ-8&&lp[1]>8&&lp[1]<SZ-8){
+          oc.setLineDash([]);
+          oc.fillStyle=`rgba(255,220,80,${(0.55*bright).toFixed(3)})`;oc.font='8px sans-serif';oc.textAlign='left';
+          oc.fillText(km.toLocaleString()+'km',lp[0]+3,lp[1]);
+          oc.setLineDash([3,5]);
         }
       }
+      oc.setLineDash([]);
+      // Dist円（Panモード時は非表示）
+      if(distKmMap>0&&distKmMap<=20000){
+        const distDeg=distKmMap/111.32;
+        if(distDeg<175){
+          oc.beginPath();
+          const opg2=d3.geoPath(proj,oc);
+          opg2(d3.geoCircle().center([CX,CY]).radius(distDeg)());
+          oc.strokeStyle=`rgba(100,200,255,${(0.7*bright).toFixed(3)})`;
+          oc.lineWidth=1.2;
+          oc.setLineDash([]);
+          oc.stroke();
+          const dp=proj([CX,CY-distDeg+0.3]);
+          if(dp&&dp[0]>8&&dp[0]<SZ-8&&dp[1]>8&&dp[1]<SZ-8){
+            oc.fillStyle=`rgba(100,200,255,${(0.85*bright).toFixed(3)})`;
+            oc.font='9px sans-serif';oc.textAlign='left';
+            oc.fillText(distKmMap.toLocaleString()+'km',dp[0]+3,dp[1]);
+          }
+        }
+      }
+    } else {
+      oc.setLineDash([]);
     }
     oc.restore();
     _offscreenKey=offKey;
@@ -1469,8 +1527,7 @@ function drawMap(skipBuildProj){
       const rbnEntries=Object.entries(rbnCount)
         .filter(([rx4])=>!(rx4 in rxCount))
         .sort((a,b)=>a[1]-b[1]);
-      // maxRbnをqueryRbn結果の最大値から計算（静的なmax_count_per_cellは別スケールのため）
-      const maxRbn=rbnEntries.length>0?Math.max(...rbnEntries.map(([,v])=>v)):1;
+      const maxRbn=10;
       for(const[rx4,cnt]of rbnEntries){
         const grids=allRbnData.grids[rx4]||allData.grids[rx4];
         if(!grids)continue;
@@ -1516,7 +1573,7 @@ function drawMap(skipBuildProj){
       }
     }
     const offscreenRbn=Math.max(0,totalRbnGrids-visRbnGrids);
-    const rbnMaxC=Object.values(rbnCount).length>0?Math.max(...Object.values(rbnCount)):1;
+    const rbnMaxC=10;
     _blinkCellCache={rxCount,maxC,cx2,cy2,R,entries:cellEntries,grids:allData.grids,offscreenGrids,
       rbnCount,rbnMaxC,offscreenRbn,
       rbnGrids:{...allRbnData?.grids||{},...allData.grids},
@@ -1547,8 +1604,6 @@ function drawMap(skipBuildProj){
     const parenHtml=`<span style="color:${DC}"> (</span>${pctNumHtml}<span style="color:${DC}">%)</span>`;
     ovOff.innerHTML=`${numHtml}${denomHtml}${parenHtml}`;
     ovOff._blink=(offG>0||!pctIsZero);
-    // 初期opacity設定
-    ovOff.querySelectorAll('.blink').forEach(el=>el.style.opacity=_blinkAlpha);
   }
 
   c2.restore();
@@ -1556,27 +1611,29 @@ function drawMap(skipBuildProj){
   c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);
   c2.strokeStyle='rgba(255,255,255,0.20)';c2.lineWidth=1.5;c2.stroke();
 
-  const cp=proj([CX,CY]);
-  if(cp){
-    c2.globalAlpha=centerLabelAlpha;
-    c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
-    c2.fillStyle='#ee4444';c2.fill();
-    c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
-    c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';
-    c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
-    c2.globalAlpha=1.0;
-  }
-
-  if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
-    const qp=proj([QX,QY]);
-    if(qp){c2.beginPath();c2.arc(qp[0],qp[1],4,0,Math.PI*2);
-      c2.fillStyle='#4af';c2.fill();c2.strokeStyle='#fff';c2.lineWidth=1;c2.stroke();}
+  const _panActive=document.getElementById('chk-pan')?.checked&&(viewTX!==0||viewTY!==0||viewS!==1);
+  if(!_panActive){
+    const cp=proj([CX,CY]);
+    if(cp){
+      c2.globalAlpha=centerLabelAlpha;
+      c2.beginPath();c2.arc(cp[0],cp[1],4,0,Math.PI*2);
+      c2.fillStyle='#ee4444';c2.fill();
+      c2.strokeStyle='#fff';c2.lineWidth=1.5;c2.stroke();
+      c2.fillStyle='#fff';c2.font='bold 11px sans-serif';c2.textAlign='left';
+      c2.fillText(document.getElementById('inp-grid').value.toUpperCase(),cp[0]+6,cp[1]+4);
+      c2.globalAlpha=1.0;
+    }
+    if(!document.getElementById('chk-fixed').checked&&(Math.abs(QX-CX)>0.1||Math.abs(QY-CY)>0.1)){
+      const qp=proj([QX,QY]);
+      if(qp){c2.beginPath();c2.arc(qp[0],qp[1],4,0,Math.PI*2);
+        c2.fillStyle='#4af';c2.fill();c2.strokeStyle='#fff';c2.lineWidth=1;c2.stroke();}
+    }
   }
 
   c2.textAlign='center';c2.textBaseline='middle';
   c2.fillStyle='rgba(255,255,255,0.30)';c2.font='10px sans-serif';
-  [['N',cx2,10],['E',SZ-8,cy2],['S',cx2,SZ-8],['W',8,cy2]]
-    .forEach(([l,x,y])=>c2.fillText(l,x,y));
+  [[`N`,cx2,cy2-R+10],[`E`,cx2+R-8,cy2],[`S`,cx2,cy2+R-8],[`W`,cx2-R+8,cy2]]
+    .forEach(([l,x,y])=>{if(x>=0&&x<=SZ&&y>=0&&y<=SZ)c2.fillText(l,x,y);});
 
   const rDisp=Math.round(radiusKm).toLocaleString()+'km';
   const fixed=document.getElementById('chk-fixed').checked;
@@ -1616,14 +1673,12 @@ function drawMap(skipBuildProj){
         if(numsEl){
           numsEl.textContent=String(hiddenRbn).padStart(dLen,' ');
           numsEl.className=shouldBlink?'blink':'';
-          if(shouldBlink)numsEl.style.opacity=_blinkAlpha;
         }
         const denEl=document.getElementById('ov-rbn-den');
         if(denEl) denEl.textContent=String(totalRbn).padStart(dLen,' ');
         if(pctEl){
           pctEl.textContent=String(pct).padStart(3,' ');
           pctEl.className=shouldBlink?'blink':'';
-          if(shouldBlink)pctEl.style.opacity=_blinkAlpha;
         }
         statEl._blink=shouldBlink;
         statEl.style.display='';
@@ -1732,6 +1787,13 @@ function applyContestConstraints(){
     if(isSSB){chkRbn.checked=false;chkRbn.disabled=true;}
     else{chkRbn.disabled=false;}
     if(lblRbn) lblRbn.style.opacity=isSSB?'0.4':'';
+  }
+  const chkRbnApprox=document.getElementById('chk-rbn-approx');
+  const lblRbnApprox=chkRbnApprox?.closest('label');
+  if(chkRbnApprox){
+    if(isSSB){chkRbnApprox.checked=false;chkRbnApprox.disabled=true;}
+    else{chkRbnApprox.disabled=false;}
+    if(lblRbnApprox) lblRbnApprox.style.opacity=isSSB?'0.4':'';
   }
   updateBandModeDisplay();
 }
@@ -1867,7 +1929,7 @@ function stopAll(){
   }
   if(chartRafId){cancelAnimationFrame(chartRafId);chartRafId=null;}
   if(rtTimer){clearInterval(rtTimer);clearTimeout(rtTimer);rtTimer=null;}
-  if(_rtRafId){cancelAnimationFrame(_rtRafId);_rtRafId=null;}
+  if(_rtRafId){clearInterval(_rtRafId);_rtRafId=null;}
   if(_arrowBlink.raf){cancelAnimationFrame(_arrowBlink.raf);_arrowBlink.raf=null;}
   stopCycle();
   // スライダーを有効化
@@ -1989,6 +2051,20 @@ document.getElementById('btn-play').addEventListener('click',function(){
 
 document.getElementById('btn-rtplay').addEventListener('click',function(){
   if(this.textContent.includes('Stop')){stopAll();drawMap();return;}
+  // AudioContext サイレントループ: OS に「音声再生中」と認識させ App Nap を防ぐ
+  if(!window._kaCtx){
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(AC){
+        window._kaCtx=new AC();
+        const buf=window._kaCtx.createBuffer(1,window._kaCtx.sampleRate,window._kaCtx.sampleRate);
+        const src=window._kaCtx.createBufferSource();
+        src.buffer=buf; src.loop=true;
+        src.connect(window._kaCtx.destination);
+        src.start(0);
+      }
+    }catch(e){}
+  }
   stopAll();
   this.textContent='■ Stop'; this.dataset.tip=t('rt_stop');
   this.classList.add('btn-running-rt');
@@ -2042,23 +2118,19 @@ document.getElementById('btn-rtplay').addEventListener('click',function(){
   // バンド巡回開始
   startCycle();
 
-  // RAFで毎フレーム更新（グラフ連続スクロール＋1秒毎日照更新）
+  // setIntervalで毎フレーム更新（グラフ連続スクロール＋5秒毎地図更新）
   let _rtLastSec=-1;
-  function rtRafLoop(){
-    _rtRafId=requestAnimationFrame(rtRafLoop);
+  function rtTick(){
     const cfg3=contestCfg();
     const resMin3=allData?.meta?.time_resolution_min??60;
     const stepsPerDay3=allData?.meta?.steps_per_day??24;
     const startStep3=Math.round(cfg3.startHour*60/resMin3);
     const tStep3=getRTStep();
     const now3=new Date();
-    // 現在秒のresMin内での進捗（0.0〜1.0）を小数として加算
     const secInStep=(now3.getUTCMinutes()%resMin3*60+now3.getUTCSeconds())/(resMin3*60);
-    // 48h: tStep3は0〜287で一意。24h: 従来通り折り返し
     const nowCI=cfg3.hours===48
       ? Math.max(0, tStep3-startStep3)+secInStep
       : ((tStep3-startStep3)+stepsPerDay3)%stepsPerDay3+secInStep;
-    // グラフoverlay毎フレーム更新（連続スクロール）
     if(_chartBg['bg-qsos']) _chartBg['bg-qsos'].startContestIdx=nowCI;
     if(_chartBg['bg-grids']) _chartBg['bg-grids'].startContestIdx=nowCI;
     if(_chartBg['bg-rbn-spots']) _chartBg['bg-rbn-spots'].startContestIdx=nowCI;
@@ -2069,14 +2141,13 @@ document.getElementById('btn-rtplay').addEventListener('click',function(){
       _drawChartOverlay('bg-rbn-spots','ov-rbn-spots',nowCI);
       _drawChartOverlay('bg-rbn-grids','ov-rbn-grids',nowCI);
     }
-    // 1秒ごとに地図の日照を更新（offKeyにrtSecKeyが含まれるので自動的に再描画）
-    const curSec=now3.getUTCSeconds();
+    const curSec=Math.floor(now3.getUTCSeconds()/5);
     if(curSec!==_rtLastSec){
       _rtLastSec=curSec;
-      _skipCharts=true; drawMap(true); _skipCharts=false;
+      setTimeout(()=>{_skipCharts=true;drawMap(true);_skipCharts=false;},0);
     }
   }
-  _rtRafId=requestAnimationFrame(rtRafLoop);
+  _rtRafId=setInterval(rtTick,16);
 });
 
 // ---- コントロール ------------------------------------------------------
@@ -2512,7 +2583,8 @@ function _startArrowBlink(arrows){
       alphas[i]=0.15+0.85*((1-Math.cos(phase*Math.PI*2))/2);
     }
     _arrowBlink.alphas=alphas; // _redrawCellsOnlyから参照できるよう保存
-    _drawArrowsOnCanvas(arrows,alphas);
+    const _panActiveArrow=document.getElementById('chk-pan')?.checked&&(viewTX!==0||viewTY!==0||viewS!==1);
+    if(!_panActiveArrow)_drawArrowsOnCanvas(arrows,alphas);
     _arrowBlink.raf=requestAnimationFrame(loop);
   }
   _arrowBlink.raf=requestAnimationFrame(loop);
@@ -2525,22 +2597,22 @@ function _drawArrowsOnCanvas(arrows,alphas){
   c2.beginPath();c2.arc(cx2,cy2,R,0,Math.PI*2);c2.clip();
   for(let i=0;i<arrows.length;i++){
     const{brgDeg,sizeIdx,distPx,color}=arrows[i];
-    const sizePx=ARROW_SIZES[Math.min(sizeIdx,ARROW_SIZES.length-1)];
+    const sizePx=ARROW_SIZES[Math.min(sizeIdx,ARROW_SIZES.length-1)]*viewS;
     const brgRad=brgDeg*Math.PI/180;
-    const EDGE=18;
-    const dist=R - EDGE - distPx;
+    const EDGE=18*viewS;
+    const dist=R-EDGE-distPx*viewS;
     if(dist<10)continue;
     const px2=cx2+dist*Math.sin(brgRad);
     const py2=cy2-dist*Math.cos(brgRad);
-    const tip=sizePx, half=sizePx*0.55;
+    const tip=sizePx,half=sizePx*0.55;
     c2.save();
     c2.translate(px2,py2);
     c2.rotate(brgRad);
     c2.globalAlpha=alphas?alphas[i]:0.8;
     c2.beginPath();
     c2.moveTo(0,-tip);
-    c2.lineTo(-half, tip);
-    c2.lineTo( half, tip);
+    c2.lineTo(-half,tip);
+    c2.lineTo(half,tip);
     c2.closePath();
     c2.strokeStyle=color||'rgba(255,255,255,0.9)';
     c2.lineWidth=1.2;
@@ -2636,8 +2708,14 @@ cv.addEventListener('mousemove',e=>{
   tip.innerHTML=html;
   tip.style.display='block';
   const mapRect=cv.parentElement.getBoundingClientRect();
-  let tx=e.clientX-mapRect.left+12;
-  let ty=e.clientY-mapRect.top-10;
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  const mw=mapRect.width,   mh=mapRect.height;
+  const cx=e.clientX-mapRect.left, cy=e.clientY-mapRect.top;
+  let tx=cx+12, ty=cy-10;
+  if(tx+tw>mw-4) tx=cx-tw-12;   // 右はみ出し→左反転
+  if(ty+th>mh-4) ty=cy-th-10;   // 下はみ出し→上反転
+  if(tx<4) tx=4;
+  if(ty<4) ty=4;
   tip.style.left=tx+'px';
   tip.style.top=ty+'px';
 });
@@ -2651,15 +2729,15 @@ cv.addEventListener('click',e=>{
   const rect=cv.getBoundingClientRect();
   const px=(e.clientX-rect.left)*(SZ/rect.width);
   const py=(e.clientY-rect.top)*(SZ/rect.height);
-  const cx2=SZ/2,cy2=SZ/2,R=SZ/2-4;
+  const cx2=SZ/2,cy2=SZ/2;
 
   if(!_arrowCache||_arrowCache.length===0)return;
   for(const arrow of _arrowCache){
     const{brgDeg,sizeIdx,distPx}=arrow;
-    const sizePx=ARROW_SIZES[Math.min(sizeIdx,ARROW_SIZES.length-1)];
+    const sizePx=ARROW_SIZES[Math.min(sizeIdx,ARROW_SIZES.length-1)]*viewS;
     const brgRad=brgDeg*Math.PI/180;
-    const EDGE=18;
-    const dist=R-EDGE-distPx;
+    const EDGE=18*viewS;
+    const dist=(SZ/2-4)-EDGE-distPx*viewS;
     if(dist<10)continue;
     const ax=cx2+dist*Math.sin(brgRad);
     const ay=cy2-dist*Math.cos(brgRad);
@@ -2791,9 +2869,35 @@ document.getElementById('overlay-info').addEventListener('click',()=>{
     if(d&&d.radiusKm) defaultRadius=+d.radiusKm;
   }catch(e){}
   radiusKm=defaultRadius;
+  viewTX=0;viewTY=0;viewS=1;
   _offscreen=null;_offscreenKey=null;
   drawMap();
 });
+
+// Panチェックボックスを外したらパンオフセットをリセット
+document.getElementById('chk-pan')?.addEventListener('change',function(){
+  if(!this.checked){viewTX=0;viewTY=0;viewS=1;drawMap();}
+});
+
+function updateStatus(){
+  if(!allData)return;
+  const years=allData.meta?.merged_years||[];
+  const yStr=years.length===1?`${years[0]}`:`${years.join('+')}`;
+  const base=allData._baseRecords?.length??0;
+  const approxOn=allApproxData&&document.getElementById('chk-approx')?.checked;
+  const approxN=approxOn?(allApproxData.records?.length??0):0;
+  let s=`${base.toLocaleString()} records (${yStr})`;
+  if(approxOn&&approxN>0) s+=`  (+${approxN.toLocaleString()} est.)`;
+  const rbnOn=allRbnData&&document.getElementById('chk-rbn')?.checked;
+  if(rbnOn){
+    const rbnBase=allRbnData._baseRecords?.length??0;
+    const rbnApproxOn=allRbnApproxData&&document.getElementById('chk-rbn-approx')?.checked;
+    const rbnApproxN=rbnApproxOn?(allRbnApproxData.records?.length??0):0;
+    s+=`  RBN: ${rbnBase.toLocaleString()}`;
+    if(rbnApproxOn&&rbnApproxN>0) s+=` (+${rbnApproxN.toLocaleString()} est.)`;
+  }
+  document.getElementById('status').textContent=s;
+}
 
 // ---- 初期化 ------------------------------------------------------------
 async function init(){
@@ -2826,8 +2930,7 @@ async function loadData(){
   const years=getSelectedYears();
   // 全キャッシュ・状態クリア
   stopAll();
-  if(_blinkRaf){cancelAnimationFrame(_blinkRaf);_blinkRaf=null;}
-  _blinkGen++;
+  if(_blinkRaf){clearInterval(_blinkRaf);_blinkRaf=null;}
   _blinkLastTs=null;
   _offscreen=null; _offscreenKey=null;
   Object.keys(_chartBg).forEach(k=>delete _chartBg[k]);
@@ -2835,17 +2938,18 @@ async function loadData(){
   _blinkCellCache=null;
   _rxCountPerYear={};
   allData=null;
-  _blinkAlpha=1.0;
+  _blinkAlpha=1.0;_blinkDir=-1;
   _skipCharts=false;
   _wheelPending=false;
   clearTimeout(_chartDebounce);_chartDebounce=null;
+  buildProj();
   c2.clearRect(0,0,cv.width,cv.height);
   updateBandModeDisplay();
 
   if(years.length===0){
     document.getElementById('status').textContent=isJa?'年を選択してください':'Please select a year';
     drawMap();
-    _blinkRaf=requestAnimationFrame(ts=>_blinkLoop(ts,_blinkGen));
+    if(!_blinkRaf){_blinkLastTs=null;_blinkRaf=setInterval(_blinkTick,16);}
     return;
   }
 
@@ -2862,7 +2966,7 @@ async function loadData(){
   if(loaded.length===0){
     document.getElementById('status').textContent=isJa?'Error: データが見つかりません':'Error: Data not found';
     drawMap();
-    _blinkRaf=requestAnimationFrame(ts=>_blinkLoop(ts,_blinkGen));
+    if(!_blinkRaf){_blinkLastTs=null;_blinkRaf=setInterval(_blinkTick,16);}
     return;
   }
 
@@ -2896,8 +3000,12 @@ async function loadData(){
     meta:{...base.meta, merged_years:years},
     grids:mergedGrids,
     records:mergedRecords,
-    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell))
+    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell)),
+    _baseGrids:{...mergedGrids},
+    _baseRecords:mergedRecords,
+    _baseMaxCount:Math.max(1,...Object.values(maxCountPerCell))
   };
+  allApproxData=null;
 
   {
     const cfg_load=contestCfg();
@@ -2919,15 +3027,17 @@ async function loadData(){
   }
   updateInpHour(0);
 
-  const yStr=years.length===1?years[0]:`${years.join('+')}`;
-  document.getElementById('status').textContent=
-    `${mergedRecords.length.toLocaleString()} records (${yStr})`;
+  updateStatus();
 
   // RBNデータ読み込み（チェックがあれば）
   await loadRbnData(contest, years);
+  // approxデータ読み込み（チェックがあれば）
+  await loadApproxData(contest, years);
+  await loadRbnApproxData(contest, years);
+  updateStatus();
 
   drawMap();
-  _blinkRaf=requestAnimationFrame(ts=>_blinkLoop(ts,_blinkGen));
+  if(!_blinkRaf){_blinkLastTs=null;_blinkRaf=setInterval(_blinkTick,16);}
 }
 async function loadRbnData(contest, years){
   allRbnData=null; _rbnStepIndex=null;
@@ -2962,8 +3072,12 @@ async function loadRbnData(contest, years){
     meta:{...base.meta},
     grids:mergedGrids,
     records:mergedRecords,
-    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell))
+    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell)),
+    _baseGrids:{...mergedGrids},
+    _baseRecords:mergedRecords,
+    _baseMaxCount:Math.max(1,...Object.values(maxCountPerCell))
   };
+  allRbnApproxData=null;
 
   // RBNのt_stepをQSOデータの時間解像度に合わせて変換
   // step4_rbnとstep5_rbnを --time-resolution 10 で実行した場合は変換不要
@@ -2997,8 +3111,152 @@ async function loadRbnData(contest, years){
 document.getElementById('chk-rbn')?.addEventListener('change',()=>{
   const contest=document.getElementById('sel-contest').value;
   const years=getSelectedYears();
-  loadRbnData(contest,years).then(()=>drawMap());
+  loadRbnData(contest,years).then(()=>{updateStatus();drawMap();});
 });
+
+// ---- QSO approx データ -----------------------------------------------
+function _rebuildStepIndex(){
+  if(!allData)return;
+  const cfg=contestCfg();
+  const stepsPerDay=allData.meta?.steps_per_day??24;
+  const totalSteps=cfg.hours===48?stepsPerDay*2:stepsPerDay;
+  const approxOn=allApproxData&&document.getElementById('chk-approx')?.checked;
+  // grids: baseに approx分をマージ（approx は base にないキーのみ追加）
+  allData.grids=approxOn
+    ?{...allData._baseGrids,...allApproxData.grids}
+    :{...allData._baseGrids};
+  const recs=approxOn
+    ?[...allData._baseRecords,...allApproxData.records]
+    :allData._baseRecords;
+  allData.max_count_per_cell=approxOn
+    ?Math.max(allData._baseMaxCount,allApproxData.max_count_per_cell??1)
+    :allData._baseMaxCount;
+  _stepIndex=Array.from({length:totalSteps},()=>[]);
+  for(const rec of recs){
+    const s=cfg.hours===48?rec[3]:((rec[3]%stepsPerDay)+stepsPerDay)%stepsPerDay;
+    if(s>=0&&s<totalSteps)_stepIndex[s].push(rec);
+  }
+}
+
+async function loadApproxData(contest, years){
+  allApproxData=null;
+  if(!document.getElementById('chk-approx')?.checked)return;
+
+  const results=await Promise.all(years.map(y=>
+    loadJSON([`./data/${contest}_${y}_approx.json`]).then(d=>({year:y,data:d}))
+  ));
+  const loaded=results.filter(r=>r.data);
+  if(loaded.length===0)return;
+
+  const base=loaded[0].data;
+  const mergedGrids={...base.grids};
+  const mergedRecords=[];
+  const maxCountPerCell={};
+  for(const{year,data}of loaded){
+    if(!data.records)continue;
+    Object.assign(mergedGrids,data.grids||{});
+    for(const rec of data.records){
+      const r=[rec[0],rec[1],rec[2],rec[3],rec[4],rec[5],rec[6]??0,year];
+      mergedRecords.push(r);
+      if(!maxCountPerCell[rec[0]]||rec[5]>maxCountPerCell[rec[0]])
+        maxCountPerCell[rec[0]]=rec[5];
+    }
+  }
+  allApproxData={
+    meta:{...base.meta},
+    grids:mergedGrids,
+    records:mergedRecords,
+    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell))
+  };
+  _rebuildStepIndex();
+  updateStatus();
+}
+
+document.getElementById('chk-approx')?.addEventListener('change',()=>{
+  const contest=document.getElementById('sel-contest').value;
+  const years=getSelectedYears();
+  if(allApproxData){
+    _rebuildStepIndex();
+    updateStatus();
+    drawMap();
+  }else{
+    loadApproxData(contest,years).then(()=>{updateStatus();drawMap();});
+  }
+});
+
+// ---- RBN approx データ -----------------------------------------------
+function _rebuildRbnStepIndex(){
+  if(!allRbnData)return;
+  const cfg=contestCfg();
+  const qsoStepsPerDay=allData?.meta?.steps_per_day??24;
+  const rbnTotalSteps=cfg.hours===48?qsoStepsPerDay*2:qsoStepsPerDay;
+  const approxOn=allRbnApproxData&&document.getElementById('chk-rbn-approx')?.checked;
+  allRbnData.grids=approxOn
+    ?{...allRbnData._baseGrids,...allRbnApproxData.grids}
+    :{...allRbnData._baseGrids};
+  allRbnData.max_count_per_cell=approxOn
+    ?Math.max(allRbnData._baseMaxCount,allRbnApproxData.max_count_per_cell??1)
+    :allRbnData._baseMaxCount;
+  const recs=approxOn
+    ?[...allRbnData._baseRecords,...allRbnApproxData.records]
+    :allRbnData._baseRecords;
+  _rbnStepIndex=Array.from({length:rbnTotalSteps},()=>[]);
+  for(const rec of recs){
+    const s=cfg.hours===48?rec[3]:((rec[3]%qsoStepsPerDay)+qsoStepsPerDay)%qsoStepsPerDay;
+    if(s>=0&&s<rbnTotalSteps)_rbnStepIndex[s].push(rec);
+  }
+}
+
+async function loadRbnApproxData(contest, years){
+  allRbnApproxData=null;
+  if(!document.getElementById('chk-rbn-approx')?.checked)return;
+  if(!allRbnData){
+    // RBN自体がロードされていない場合はスキップ
+    return;
+  }
+
+  const results=await Promise.all(years.map(y=>
+    loadJSON([`./data/${contest}_${y}_rbn_approx.json`]).then(d=>({year:y,data:d}))
+  ));
+  const loaded=results.filter(r=>r.data);
+  if(loaded.length===0)return;
+
+  const base=loaded[0].data;
+  const mergedGrids={...base.grids};
+  const mergedRecords=[];
+  const maxCountPerCell={};
+  for(const{year,data}of loaded){
+    if(!data.records)continue;
+    Object.assign(mergedGrids,data.grids||{});
+    for(const rec of data.records){
+      const r=[rec[0],rec[1],rec[2],rec[3],rec[4],rec[5],rec[6]??0,year];
+      mergedRecords.push(r);
+      if(!maxCountPerCell[rec[0]]||rec[5]>maxCountPerCell[rec[0]])
+        maxCountPerCell[rec[0]]=rec[5];
+    }
+  }
+  allRbnApproxData={
+    meta:{...base.meta},
+    grids:mergedGrids,
+    records:mergedRecords,
+    max_count_per_cell:Math.max(1,...Object.values(maxCountPerCell))
+  };
+  _rebuildRbnStepIndex();
+  updateStatus();
+}
+
+document.getElementById('chk-rbn-approx')?.addEventListener('change',()=>{
+  const contest=document.getElementById('sel-contest').value;
+  const years=getSelectedYears();
+  if(allRbnApproxData){
+    _rebuildRbnStepIndex();
+    updateStatus();
+    drawMap();
+  }else{
+    loadRbnApproxData(contest,years).then(()=>{updateStatus();drawMap();});
+  }
+});
+
 init();
 </script>
 </body>

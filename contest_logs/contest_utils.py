@@ -4,8 +4,43 @@ contest_utils.py: コンテスト共通ユーティリティ
 コンテスト識別子と年からパス・日程を自動解決する。
 各stepスクリプトからimportして使用する。
 """
+import locale, os, sys
 from datetime import date, timedelta, datetime
 from pathlib import Path
+
+# ---- i18n ----------------------------------------------------------------
+def _detect_lang():
+    """Detect display language from environment / system locale."""
+    for ev in ('LANG', 'LC_ALL', 'LANGUAGE', 'LC_MESSAGES'):
+        v = os.environ.get(ev, '')
+        if v:
+            return 'ja' if v.lower().startswith('ja') else 'en'
+    try:
+        locale.setlocale(locale.LC_ALL, '')
+        lc = locale.getlocale()[0] or ''
+        if lc.lower().startswith('ja'):
+            return 'ja'
+    except Exception:
+        pass
+    if sys.platform == 'win32':
+        try:
+            import winreg
+            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                               r'Control Panel\International')
+            lang = winreg.QueryValueEx(k, 'LocaleName')[0]
+            winreg.CloseKey(k)
+            if lang.startswith('ja'):
+                return 'ja'
+        except Exception:
+            pass
+    return 'en'
+
+_LANG = _detect_lang()
+
+def msg(ja, en=''):
+    """Return ja or en string depending on detected language.
+    Falls back to ja when en is empty."""
+    return ja if _LANG == 'ja' else (en or ja)
 
 # ---- コンテスト定義 -------------------------------------------------------
 CONTEST_CFG = {
@@ -133,6 +168,21 @@ def qso_pairs_csv(contest: str, year: int) -> Path:
 def rbn_pairs_csv(contest: str, year: int) -> Path:
     return BASE_DIR / "csv" / f"{contest_year_id(contest, year)}_rbn_pairs.csv"
 
+def spotted_grids_approx_csv(contest: str, year: int) -> Path:
+    return BASE_DIR / "rbn" / f"{contest_year_id(contest, year)}_spotted_grids_approx.csv"
+
+def qso_pairs_approx_csv(contest: str, year: int) -> Path:
+    return BASE_DIR / "csv" / f"{contest_year_id(contest, year)}_qso_pairs_approx.csv"
+
+def rbn_pairs_approx_csv(contest: str, year: int) -> Path:
+    return BASE_DIR / "csv" / f"{contest_year_id(contest, year)}_rbn_pairs_approx.csv"
+
+def qso_approx_json(contest: str, year: int) -> Path:
+    return HEATMAP_DIR / "data" / f"{contest}_{year}_approx.json"
+
+def rbn_approx_json(contest: str, year: int) -> Path:
+    return HEATMAP_DIR / "data" / f"{contest}_{year}_rbn_approx.json"
+
 def qso_json(contest: str, year: int) -> Path:
     return HEATMAP_DIR / "data" / f"{contest}_{year}.json"
 
@@ -141,7 +191,10 @@ def rbn_json(contest: str, year: int) -> Path:
 
 def validate_contest(contest: str):
     if contest not in CONTEST_CFG:
-        raise ValueError(f"不明なコンテスト: {contest}\n有効: {list(CONTEST_CFG.keys())}")
+        raise ValueError(msg(
+            f"不明なコンテスト: {contest}\n有効: {list(CONTEST_CFG.keys())}",
+            f"Unknown contest: {contest}\nValid: {list(CONTEST_CFG.keys())}",
+        ))
 
 # ---- SSN 自動解決 ---------------------------------------------------------
 # SILSOファイルの探索候補（スクリプト配置ディレクトリは呼び出し側で先頭追加）
@@ -180,7 +233,10 @@ def load_ssn_table(extra_dirs=None):
         except OSError:
             continue
         if table:
-            print(f"SSNデータ読み込み: {path} ({len(table)} 件)")
+            print(msg(
+                f"SSNデータ読み込み: {path} ({len(table)} 件)",
+                f"SSN data loaded: {path} ({len(table)} entries)",
+            ))
             return table
     return None
 
@@ -199,21 +255,36 @@ def resolve_ssn(contest: str, year: int, ssn_override=None, script_dir=None):
     cfg = CONTEST_CFG.get(contest, {})
     contest_month = cfg.get("month")
     if contest_month is None:
-        print(f"警告: コンテスト '{contest}' の開催月が不明。SSN=0 を使用します。")
+        print(msg(
+            f"警告: コンテスト '{contest}' の開催月が不明。SSN=0 を使用します。",
+            f"Warning: contest month unknown for '{contest}'. Using SSN=0.",
+        ))
         return 0
 
     extra = [script_dir] if script_dir else None
     table = load_ssn_table(extra_dirs=extra)
     if table is None:
-        print(f"警告: SILSOファイルが見つかりません。SSN=0 を使用します。")
-        print(f"  配置場所の候補: {_SILSO_CANDIDATES[0]}")
-        print(f"  ダウンロード: https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt")
+        print(msg(
+            "警告: SILSOファイルが見つかりません。SSN=0 を使用します。",
+            "Warning: SILSO file not found. Using SSN=0.",
+        ))
+        print(msg(
+            f"  配置場所の候補: {_SILSO_CANDIDATES[0]}",
+            f"  Expected location: {_SILSO_CANDIDATES[0]}",
+        ))
+        print("  Download: https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt")
         return 0
 
     ssn = table.get((year, contest_month))
     if ssn is None:
-        print(f"警告: {year}年{contest_month}月のSSNがファイルに見つかりません。SSN=0 を使用します。")
+        print(msg(
+            f"警告: {year}年{contest_month}月のSSNがファイルに見つかりません。SSN=0 を使用します。",
+            f"Warning: SSN for {year}/{contest_month:02d} not found in file. Using SSN=0.",
+        ))
         return 0
 
-    print(f"SSN自動解決: {year}年{contest_month}月 = {ssn}")
+    print(msg(
+        f"SSN自動解決: {year}年{contest_month}月 = {ssn}",
+        f"SSN resolved: {year}/{contest_month:02d} = {ssn}",
+    ))
     return ssn
