@@ -104,8 +104,7 @@ python3 --version
     ├── raw/{contest}_{year}/*.txt     公開されたCabrilloログ
     ├── csv/                           処理済みCSVファイル
     ├── rbn/
-    │   ├── raw/YYYYMMDD.zip            RBN rawデータ
-    │   └── rbn_nodes.csv              RBNノードリスト（fetch_rbn_nodes.py が生成）
+    │   └── raw/YYYYMMDD.zip            RBN rawデータ
     ├── *.py                           データ処理スクリプト群
     ├── generate_all.sh                全データ一括再生成スクリプト（macOS/Linux用）
     └── generate_all.bat               全データ一括再生成スクリプト（Windows用）
