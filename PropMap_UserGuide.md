@@ -492,13 +492,13 @@ bash generate_all.sh
 バックグラウンドで実行する場合：
 
 ```bash
-nohup bash generate_all.sh > gen.log 2>&1 &
+nohup bash generate_all.sh &
 ```
 
-進捗確認：
+進捗確認（スクリプトが内部で `generate_all.log` に記録する）：
 
 ```bash
-tail -f gen.log
+tail -f generate_all.log
 ```
 
 #### Windows（generate_all.bat）
