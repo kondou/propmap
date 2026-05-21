@@ -517,15 +517,6 @@ generate_all.bat --dry-run
 generate_all.bat
 ```
 
-### SN_m_tot_V2.0.txtの更新
-
-太陽黒点数データは定期的に更新される。`fetch_ssn.py` で最新版をダウンロードする
-
-```bash
-python3 ~/heatmap/fetch_ssn.py
-```
-
-すでにファイルが存在する場合はレコード数を比較してスキップする。強制上書きするには `--force` を付ける
 
 ```bash
 python3 ~/heatmap/fetch_ssn.py --force
