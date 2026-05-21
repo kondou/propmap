@@ -85,7 +85,7 @@ python3 --version
 
 ### ファイル構成
 
-すべてのファイルは `~/heatmap/`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap\`（Windows）以下に配置する。
+すべてのファイルは `~/heatmap/`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap\`（Windows）以下に配置する。リポジトリに含まれるファイルのほか、パイプライン初回実行時に fetch スクリプトが自動取得するファイル（★）とデータ構築スクリプトが生成するファイル（☆）がある。
 
 ``` { .no-copy }
 ~/heatmap/
@@ -96,15 +96,17 @@ python3 --version
 ├── fetch_cty.py              cty.dat 一式ダウンロードスクリプト
 ├── fetch_ssn.py              太陽黒点数データダウンロードスクリプト
 ├── fetch_rbn_nodes.py        RBNノードリスト生成スクリプト
-├── cty_data/                 cty.dat 一式（fetch_cty.py が生成）
+├── cty_data/                 ★ cty.dat 一式（fetch_cty.py が取得）
 ├── data/
-│   ├── {contest}_{year}.json         QSOデータ（10分解像度）
-│   └── {contest}_{year}_rbn.json     RBNデータ（10分解像度）
+│   ├── {contest}_{year}.json         ☆ QSOデータ（10分解像度）
+│   └── {contest}_{year}_rbn.json     ☆ RBNデータ（10分解像度）
 └── contest_logs/
-    ├── raw/{contest}_{year}/*.txt     公開されたCabrilloログ
-    ├── csv/                           処理済みCSVファイル
+    ├── raw/{contest}_{year}/*.txt     ☆ 公開されたCabrilloログ
+    ├── csv/                           ☆ 処理済みCSVファイル
     ├── rbn/
-    │   └── raw/YYYYMMDD.zip            RBN rawデータ
+    │   ├── raw/YYYYMMDD.zip           ★ RBN rawデータ（download_rbn.py が取得）
+    │   └── rbn_nodes.csv              ★ RBNノードリスト（fetch_rbn_nodes.py が取得）
+    ├── SN_m_tot_V2.0.txt              ★ 太陽黒点数データ（fetch_ssn.py が取得）
     ├── *.py                           データ処理スクリプト群
     ├── generate_all.sh                全データ一括再生成スクリプト（macOS/Linux用）
     └── generate_all.bat               全データ一括再生成スクリプト（Windows用）
