@@ -71,7 +71,7 @@ python --version
 
 #### Windows 11 — WSL2 あり
 
-WSL2 環境ではシェルスクリプトをそのまま利用でき、macOS と同等の操作感で使用できる。WSL2 のセットアップ手順は [Microsoft 公式ドキュメント](https://learn.microsoft.com/ja-jp/windows/wsl/install) を参照。Ubuntu インストール後、以下で Python 3 を導入する：
+WSL2 環境ではシェルスクリプトをそのまま利用でき、macOS と同等の操作感で使用可能。WSL2 のセットアップ手順は [Microsoft 公式ドキュメント](https://learn.microsoft.com/ja-jp/windows/wsl/install) を参照。Ubuntu インストール後、以下で Python 3 を導入する：
 
 ```bash
 sudo apt update && sudo apt install -y python3 python3-pip
@@ -408,7 +408,11 @@ RBN（Reverse Beacon Network）は、CWやデジタルモードの信号を自�
 
 ### SSN（太陽黒点数）について
 
-`SN_m_tot_V2.0.txt`（SILSOが提供する月別太陽黒点数データ）を使用してコンテスト開催月のSSNを自動解決し、データ処理時に活用する想定(未実装)。最新データへの更新時は [SILSO](https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt) からダウンロードして `~/heatmap/contest_logs/SN_m_tot_V2.0.txt` に上書き
+`SN_m_tot_V2.0.txt`（SILSOが提供する月別太陽黒点数データ）を使用してコンテスト開催月のSSNを自動解決し、データ処理時に活用する想定（現状 SSN は RBN ペア CSV のメタデータフィールドとして記録されているが、ヒートマップ表示への直接の影響はなく、この値の利用は未実装）。ファイルが存在しない場合は `generate_all.sh`（または `.bat`）実行時に `fetch_ssn.py` が自動的にダウンロードする。手動で更新する場合は以下を実行する：
+
+```bash
+python3 ~/heatmap/fetch_ssn.py
+```
 
 ---
 
