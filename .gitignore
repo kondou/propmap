@@ -33,6 +33,8 @@ heatmap_working.html
 handover_to_claudecode.md
 contest_logs/README.txt
 contest_logs/regenerate_all_rbn.sh
+generate_guides.py
+fetch_qrz.py
 
 # Claude Code internal
 .claude/
