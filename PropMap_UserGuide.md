@@ -103,6 +103,8 @@ python3 --version
 └── contest_logs/
     ├── raw/{contest}_{year}/*.txt     ☆ 公開されたCabrilloログ
     ├── csv/                           ☆ 処理済みCSVファイル
+    │   ├── annotated/{contest}_{year}/  ☆ 注釈付きCabrilloログ（通常）
+    │   └── annotated_approx/{contest}_{year}/  ☆ 注釈付きCabrilloログ（approx）
     ├── rbn/
     │   ├── raw/YYYYMMDD.zip           ★ RBN rawデータ（download_rbn.py が取得）
     │   └── rbn_nodes.csv              ★ RBNノードリスト（fetch_rbn_nodes.py が取得）
