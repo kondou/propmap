@@ -55,7 +55,7 @@ python3 --version
 
 #### Windows 11 — WSL2 なし
 
-ビューワーの利用からデータ構築まで、Python for Windows と付属の `generate_all.bat` にて対応。`generate_all.sh` は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う `generate_all.bat` を使用する
+`heatmap.html`（PropMap 本体）の利用からデータ構築まで、Python for Windows と付属の `generate_all.bat` にて対応。`generate_all.sh` は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う `generate_all.bat` を使用する
 
 1. [python.org](https://www.python.org/downloads/) から Windows 用インストーラを取得する
 2. インストール時に **「Add Python to PATH」にチェックを入れる**（デフォルトではオフのため必須）
