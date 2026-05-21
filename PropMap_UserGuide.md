@@ -525,7 +525,9 @@ generate_all.bat
 | `step1_collect_logs_fast.py` | 公開ログの収集・ダウンロード |
 | `step3_grid_survey.py` | ログファイルのグリッドロケーター含有状況調査 |
 | `step4_crosscheck.py` | QSOのクロスチェックとペアCSV生成 |
+| `step4_crosscheck_approx.py` | QSOのクロスチェックとペアCSV生成（cty.dat推定グリッド使用） |
 | `step4_rbn.py` | RBNデータの処理とペアCSV生成 |
+| `step4_rbn_approx.py` | RBNデータの処理とペアCSV生成（cty.dat推定グリッド使用） |
 | `step5_aggregate.py` | QSOペアCSV → ヒートマップJSON |
 | `step5_rbn.py` | RBNペアCSV → ヒートマップJSON |
 | `make_spotted_grids.py` | RBNスポットグリッドの抽出 |
@@ -536,11 +538,15 @@ generate_all.bat
 | `fetch_cty.py` | cty.dat 一式をダウンロード（`cty_data/` に配置） |
 | `fetch_ssn.py` | 太陽黒点数データ（SN_m_tot_V2.0.txt）をダウンロード |
 | `fetch_rbn_nodes.py` | RBNノードリスト（`rbn/rbn_nodes.csv`）を生成・更新 |
+| `fetch_qrz.py` | QRZ.com からコールサインのグリッドロケータを取得 |
 | `generate_all.sh` | 全コンテスト・全年の一括再生成（macOS/Linux用） |
 | `generate_all.bat` | 全コンテスト・全年の一括再生成（Windows用） |
+| `generate_guides.py` | MD から HTML ユーザーガイド（ja/en）を生成 |
 | `check_qso_count.py` | 指定条件で `qso_pairs.csv` を検索し、パネル表示対象を確認（デバッグ用） |
 | `check_rbn_count.py` | 指定条件で `rbn_pairs.csv` を検索し、RBNパネル表示対象を確認（デバッグ用） |
 | `check_rbn_detail.py` | `*_rbn.json` のレコード構造を確認（デバッグ用） |
+| `check_rbn_csv.py` | RBN CSV の utc_day 分布を確認（デバッグ用） |
+| `check_rbn_json.py` | RBN JSON の t_step 分布を確認（デバッグ用） |
 
 ---
 
