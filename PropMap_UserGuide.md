@@ -517,13 +517,6 @@ generate_all.bat --dry-run
 generate_all.bat
 ```
 
-
-```bash
-python3 ~/heatmap/fetch_ssn.py --force
-```
-
-更新後は影響するコンテスト・年のデータを再生成することで最新の SSN 値が CSV レコードに反映される（現状 SSN は RBN ペア CSV のメタデータフィールドとして記録されているが、ヒートマップ表示への直接の影響はなく、この値の利用は未実装）
-
 ### 各スクリプトの役割
 
 | スクリプト | 役割 |
