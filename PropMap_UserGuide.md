@@ -35,7 +35,7 @@ PropMapは、アマチュア無線コンテストの公開ログデータおよ�
 
 ### Python 3 のインストール
 
-#### macOS Tahoe
+#### macOS Tahoe以降
 
 macOS には OS 自体に Python 3 が付属しているが、OS アップデートで置き換わるリスクや `pip` の利用しづらさがあるため、Homebrew 経由のインストールを推奨する。データ処理スクリプトで追加パッケージが必要になった場合も Homebrew Python であれば `pip` で容易に対応可能
 
@@ -51,6 +51,7 @@ brew install python3
 ```bash
 python3 --version
 ```
+`Python 3.x.x` と表示されれば成功（x は任意の数値）
 
 #### Windows 11 — WSL2 なし
 
@@ -62,6 +63,7 @@ python3 --version
 ```
 python --version
 ```
+`Python 3.x.x` と表示されれば成功。`Python 2.x.x` と表示される場合はPATHの設定を見直すこと
 
 > **注意:** Windows では `python3` ではなく `python` コマンドを使用すること
 
@@ -73,7 +75,9 @@ WSL2 環境ではシェルスクリプトをそのまま利用でき、macOS と
 
 ```bash
 sudo apt update && sudo apt install -y python3 python3-pip
+python3 --version
 ```
+`Python 3.x.x` と表示されれば成功
 
 以降の操作は macOS と同じ。ファイルの配置先は WSL2 のホームディレクトリ（`~/heatmap/`）とする。ブラウザは Windows 側で `http://localhost:8765` にアクセスする。
 
