@@ -20,6 +20,7 @@ data/
 contest_logs/raw/
 contest_logs/csv/
 contest_logs/rbn/
+contest_logs/SN_m_tot_V2.0.txt
 
 # Log files
 *.log

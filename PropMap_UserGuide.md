@@ -106,7 +106,6 @@ python3 --version
     ├── rbn/
     │   ├── raw/YYYYMMDD.zip            RBN rawデータ
     │   └── rbn_nodes.csv              RBNノードリスト（fetch_rbn_nodes.py が生成）
-    ├── SN_m_tot_V2.0.txt              太陽黒点数データ（SILSO）
     ├── *.py                           データ処理スクリプト群
     ├── generate_all.sh                全データ一括再生成スクリプト（macOS/Linux用）
     └── generate_all.bat               全データ一括再生成スクリプト（Windows用）
