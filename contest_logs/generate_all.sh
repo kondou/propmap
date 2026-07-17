@@ -27,6 +27,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HEATMAP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_FILE="$SCRIPT_DIR/generate_all.log"
 
+# ---- Python 解決 -------------------------------------------------------------
+# 開発環境の有無を意識せずに実行できるよう、find_python.sh で解決する。
+# $PYTHON は複数語になり得るため、以降は必ずクォート無しの $PYTHON で使う。
+source "$HEATMAP_DIR/find_python.sh"
+if [ -z "${PYTHON:-}" ]; then
+  echo "!!! Python が見つかりません。案内に従って導入後、再度実行してください。" >&2
+  exit 1
+fi
+
 # ---- i18n -------------------------------------------------------------------
 if [[ "${LANG:-}" == ja* ]] || [[ "${LC_ALL:-}" == ja* ]] || [[ "${LANGUAGE:-}" == ja* ]]; then
   _L=ja
@@ -129,11 +138,11 @@ _msg "==== cty.dat 取得 ====" "==== Fetch cty.dat ===="
 
 if [[ $DRY_RUN -eq 0 ]]; then
   if [[ $FORCE -eq 1 ]]; then
-    echo "  >>> python3 $HEATMAP_DIR/fetch_cty.py --force"
-    python3 "$HEATMAP_DIR/fetch_cty.py" --force 2>&1 | tee -a "$LOG_FILE"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_cty.py --force"
+    $PYTHON "$HEATMAP_DIR/fetch_cty.py" --force 2>&1 | tee -a "$LOG_FILE"
   else
-    echo "  >>> python3 $HEATMAP_DIR/fetch_cty.py"
-    python3 "$HEATMAP_DIR/fetch_cty.py" 2>&1 | tee -a "$LOG_FILE"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_cty.py"
+    $PYTHON "$HEATMAP_DIR/fetch_cty.py" 2>&1 | tee -a "$LOG_FILE"
   fi
   frc=${PIPESTATUS[0]}
   { echo "$(ts)  fetch_cty rc=$frc"; } >> "$LOG_FILE"
@@ -145,9 +154,9 @@ if [[ $DRY_RUN -eq 0 ]]; then
   fi
 else
   if [[ $FORCE -eq 1 ]]; then
-    echo "  >>> python3 $HEATMAP_DIR/fetch_cty.py --force"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_cty.py --force"
   else
-    echo "  >>> python3 $HEATMAP_DIR/fetch_cty.py"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_cty.py"
   fi
 fi
 
@@ -158,11 +167,11 @@ _msg "==== SSN データ取得 ====" "==== Fetch SSN data ===="
 
 if [[ $DRY_RUN -eq 0 ]]; then
   if [[ $FORCE -eq 1 ]]; then
-    echo "  >>> python3 $HEATMAP_DIR/fetch_ssn.py --force"
-    python3 "$HEATMAP_DIR/fetch_ssn.py" --force 2>&1 | tee -a "$LOG_FILE"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_ssn.py --force"
+    $PYTHON "$HEATMAP_DIR/fetch_ssn.py" --force 2>&1 | tee -a "$LOG_FILE"
   else
-    echo "  >>> python3 $HEATMAP_DIR/fetch_ssn.py"
-    python3 "$HEATMAP_DIR/fetch_ssn.py" 2>&1 | tee -a "$LOG_FILE"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_ssn.py"
+    $PYTHON "$HEATMAP_DIR/fetch_ssn.py" 2>&1 | tee -a "$LOG_FILE"
   fi
   frc=${PIPESTATUS[0]}
   { echo "$(ts)  fetch_ssn rc=$frc"; } >> "$LOG_FILE"
@@ -174,9 +183,9 @@ if [[ $DRY_RUN -eq 0 ]]; then
   fi
 else
   if [[ $FORCE -eq 1 ]]; then
-    echo "  >>> python3 $HEATMAP_DIR/fetch_ssn.py --force"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_ssn.py --force"
   else
-    echo "  >>> python3 $HEATMAP_DIR/fetch_ssn.py"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_ssn.py"
   fi
 fi
 
@@ -187,11 +196,11 @@ _msg "==== RBN ノードリスト更新 ====" "==== Update RBN node list ===="
 
 if [[ $DRY_RUN -eq 0 ]]; then
   if [[ $FORCE -eq 1 ]]; then
-    echo "  >>> python3 $HEATMAP_DIR/fetch_rbn_nodes.py --force"
-    python3 "$HEATMAP_DIR/fetch_rbn_nodes.py" --force 2>&1 | tee -a "$LOG_FILE"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_rbn_nodes.py --force"
+    $PYTHON "$HEATMAP_DIR/fetch_rbn_nodes.py" --force 2>&1 | tee -a "$LOG_FILE"
   else
-    echo "  >>> python3 $HEATMAP_DIR/fetch_rbn_nodes.py"
-    python3 "$HEATMAP_DIR/fetch_rbn_nodes.py" 2>&1 | tee -a "$LOG_FILE"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_rbn_nodes.py"
+    $PYTHON "$HEATMAP_DIR/fetch_rbn_nodes.py" 2>&1 | tee -a "$LOG_FILE"
   fi
   frc=${PIPESTATUS[0]}
   { echo "$(ts)  fetch_rbn_nodes rc=$frc"; } >> "$LOG_FILE"
@@ -203,9 +212,9 @@ if [[ $DRY_RUN -eq 0 ]]; then
   fi
 else
   if [[ $FORCE -eq 1 ]]; then
-    echo "  >>> python3 $HEATMAP_DIR/fetch_rbn_nodes.py --force"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_rbn_nodes.py --force"
   else
-    echo "  >>> python3 $HEATMAP_DIR/fetch_rbn_nodes.py"
+    echo "  >>> $PYTHON $HEATMAP_DIR/fetch_rbn_nodes.py"
   fi
 fi
 
@@ -225,7 +234,7 @@ run_contest() {
   run_step \
     "step1 $contest $year" \
     "$RAW" \
-    python3 "$SCRIPT_DIR/step1_collect_logs_fast.py" \
+    $PYTHON "$SCRIPT_DIR/step1_collect_logs_fast.py" \
       --contest "$contest" --year "$year"
 
   # download_rbn: 内部スキップあり・常に呼ぶ（RBNあり時のみ）
@@ -233,7 +242,7 @@ run_contest() {
     run_step \
       "download_rbn $contest $year" \
       "" \
-      python3 "$SCRIPT_DIR/download_rbn.py" \
+      $PYTHON "$SCRIPT_DIR/download_rbn.py" \
         --contest "$contest" --year "$year"
   fi
 
@@ -242,7 +251,7 @@ run_contest() {
     run_step \
       "make_spotted_grids $contest $year" \
       "$RBN_DIR/${contest}_${year}_spotted_grids.csv" \
-      python3 "$SCRIPT_DIR/make_spotted_grids.py" \
+      $PYTHON "$SCRIPT_DIR/make_spotted_grids.py" \
         --contest "$contest" --year "$year"
   fi
 
@@ -250,35 +259,35 @@ run_contest() {
   run_step \
     "make_spotted_grids_approx $contest $year" \
     "$RBN_DIR/${contest}_${year}_spotted_grids_approx.csv" \
-    python3 "$SCRIPT_DIR/make_spotted_grids_approx.py" \
+    $PYTHON "$SCRIPT_DIR/make_spotted_grids_approx.py" \
       --contest "$contest" --year "$year"
 
   # QSO クロスチェック → JSON
   run_step \
     "step4_crosscheck $contest $year" \
     "$CSV/${contest}_${year}_qso_pairs.csv" \
-    python3 "$SCRIPT_DIR/step4_crosscheck.py" \
+    $PYTHON "$SCRIPT_DIR/step4_crosscheck.py" \
       --contest "$contest" --year "$year" \
       --max-call-dist 2 --band-fix-window 15 --annotate-logs
 
   run_step \
     "step5_aggregate $contest $year" \
     "$DATA/${contest}_${year}.json" \
-    python3 "$SCRIPT_DIR/step5_aggregate.py" \
+    $PYTHON "$SCRIPT_DIR/step5_aggregate.py" \
       --contest "$contest" --year "$year"
 
   # approx グリッドDB → QSO approx クロスチェック → JSON
   run_step \
     "step4_crosscheck_approx $contest $year" \
     "$CSV/${contest}_${year}_qso_pairs_approx.csv" \
-    python3 "$SCRIPT_DIR/step4_crosscheck_approx.py" \
+    $PYTHON "$SCRIPT_DIR/step4_crosscheck_approx.py" \
       --contest "$contest" --year "$year" \
       --max-call-dist 2 --band-fix-window 15 --annotate-logs
 
   run_step \
     "step5_aggregate_approx $contest $year" \
     "$DATA/${contest}_${year}_approx.json" \
-    python3 "$SCRIPT_DIR/step5_aggregate.py" \
+    $PYTHON "$SCRIPT_DIR/step5_aggregate.py" \
       --contest "$contest" --year "$year" \
       --input "$CSV/${contest}_${year}_qso_pairs_approx.csv" \
       --output "$DATA/${contest}_${year}_approx.json"
@@ -288,25 +297,25 @@ run_contest() {
     run_step \
       "step4_rbn $contest $year" \
       "$CSV/${contest}_${year}_rbn_pairs.csv" \
-      python3 "$SCRIPT_DIR/step4_rbn.py" \
+      $PYTHON "$SCRIPT_DIR/step4_rbn.py" \
         --contest "$contest" --year "$year"
 
     run_step \
       "step5_rbn $contest $year" \
       "$DATA/${contest}_${year}_rbn.json" \
-      python3 "$SCRIPT_DIR/step5_rbn.py" \
+      $PYTHON "$SCRIPT_DIR/step5_rbn.py" \
         --contest "$contest" --year "$year"
 
     run_step \
       "step4_rbn_approx $contest $year" \
       "$CSV/${contest}_${year}_rbn_pairs_approx.csv" \
-      python3 "$SCRIPT_DIR/step4_rbn_approx.py" \
+      $PYTHON "$SCRIPT_DIR/step4_rbn_approx.py" \
         --contest "$contest" --year "$year"
 
     run_step \
       "step5_rbn_approx $contest $year" \
       "$DATA/${contest}_${year}_rbn_approx.json" \
-      python3 "$SCRIPT_DIR/step5_rbn.py" \
+      $PYTHON "$SCRIPT_DIR/step5_rbn.py" \
         --contest "$contest" --year "$year" \
         --input "$CSV/${contest}_${year}_rbn_pairs_approx.csv" \
         --output "$DATA/${contest}_${year}_rbn_approx.json"
@@ -314,31 +323,20 @@ run_contest() {
 }
 
 # ---- コンテスト一覧 ---------------------------------------------------------
+# コンテスト×年の一覧は contest_utils.py --list から取得する
+# （first_year と開催日程から自動導出。年のハードコードはしない）
 
-# iaru: 2018〜2025, RBNあり
-for year in $(seq 2018 2025); do
-  run_contest iaru "$year" 1
-done
+CONTEST_LIST="$($PYTHON "$SCRIPT_DIR/contest_utils.py" --list)"
+if [[ -z "$CONTEST_LIST" ]]; then
+  _err "!!! contest_utils.py --list の出力が空です" \
+       "!!! Empty output from contest_utils.py --list"
+  exit 1
+fi
 
-# cqww_cw: 2005〜2025, RBNあり
-for year in $(seq 2005 2025); do
-  run_contest cqww_cw "$year" 1
-done
-
-# cqww_ssb: 2005〜2025, RBNなし
-for year in $(seq 2005 2025); do
-  run_contest cqww_ssb "$year" 0
-done
-
-# cqwpx_cw: 2008〜2025, RBNあり
-for year in $(seq 2008 2025); do
-  run_contest cqwpx_cw "$year" 1
-done
-
-# cqwpx_ssb: 2008〜2025, RBNなし
-for year in $(seq 2008 2025); do
-  run_contest cqwpx_ssb "$year" 0
-done
+while read -r contest year has_rbn; do
+  [[ -z "$contest" ]] && continue
+  run_contest "$contest" "$year" "$has_rbn"
+done <<< "$CONTEST_LIST"
 
 # ---- 完了 -------------------------------------------------------------------
 echo ""

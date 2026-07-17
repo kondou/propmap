@@ -45,18 +45,24 @@ except ImportError:
 # -----------------------------------------------------------------------------
 
 try:
-    from contest_utils import get_contest_dates, rbn_raw_dir
+    from contest_utils import (get_contest_dates, rbn_raw_dir,
+                               available_years, CONTEST_CFG)
     _use_utils = True
 except ImportError:
     _use_utils = False
 
-RBN_CONTESTS = ["iaru", "cqww_cw", "cqwpx_cw"]
-
-YEAR_RANGES = {
-    "iaru":     range(2018, 2026),
-    "cqww_cw":  range(2005, 2026),
-    "cqwpx_cw": range(2008, 2026),
-}
+# 一次情報は contest_utils（has_rbn フラグと available_years）。
+# import 失敗時のみ静的フォールバック。
+if _use_utils:
+    RBN_CONTESTS = [c for c, cfg in CONTEST_CFG.items() if cfg["has_rbn"]]
+    YEAR_RANGES  = {c: available_years(c) for c in RBN_CONTESTS}
+else:
+    RBN_CONTESTS = ["iaru", "cqww_cw", "cqwpx_cw"]
+    YEAR_RANGES = {
+        "iaru":     range(2018, 2026),
+        "cqww_cw":  range(2005, 2026),
+        "cqwpx_cw": range(2008, 2026),
+    }
 
 def _full_weekends(year, month):
     d = date(year, month, 1)

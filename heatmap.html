@@ -237,6 +237,9 @@ canvas#cv { display:block; cursor:crosshair; }
             <option value="cqwpx_cw">CQ WPX CW</option>
             <option value="cqwpx_ssb">CQ WPX SSB</option>
           </select>
+          <a id="lnk-update" href="./update.html" target="propmap_update"
+             style="display:none;font-size:11px;color:#7ab8ff;margin-left:6px;text-decoration:none;"
+             title="新規公開ログの確認と取り込み">⟳ データ更新</a>
         </div>
       </div>
       <div class="ctrl-row" style="align-items:center;">
@@ -519,6 +522,37 @@ const CONTEST_CFG={
   cqwpx_cw:  {startHour:0,  hours:48, label:'CQ WPX CW',  years:Array.from({length:18},(_,i)=>2008+i)},
   cqwpx_ssb: {startHour:0,  hours:48, label:'CQ WPX SSB', years:Array.from({length:18},(_,i)=>2008+i)},
 };
+
+// ---- 年リストの動的更新 (propmap_server.py の /api/datasets) ----------------
+// APIが使える場合のみ、data/*.json の実在に基づいて years を更新する。
+// 従来の python3 -m http.server で配信された場合は fetch が404となり、
+// 上のハードコード値のまま動く（後方互換）。
+let _dsRefreshing = false;
+async function refreshDatasets(){
+  if(_dsRefreshing) return;
+  _dsRefreshing = true;
+  try{
+    const r = await fetch('/api/datasets', {cache:'no-store'});
+    if(!r.ok) return;
+    const ds = await r.json();
+    document.getElementById('lnk-update').style.display = '';  // サーバー機能あり
+    let changed = false;
+    for(const k in CONTEST_CFG){
+      const ys = ds[k];
+      if(Array.isArray(ys) && ys.length > 0 &&
+         JSON.stringify(ys) !== JSON.stringify(CONTEST_CFG[k].years)){
+        CONTEST_CFG[k].years = ys;
+        changed = true;
+      }
+    }
+    if(changed) updateYearPanel();
+  }catch(e){ /* API無し: ハードコード値のまま */ }
+  finally{ _dsRefreshing = false; }
+}
+// 起動時と、更新タブから戻ってきた時（フォーカス取得時）に再取得
+window.addEventListener('focus', refreshDatasets);
+refreshDatasets();
+
 
 function contestCfg(){
   return CONTEST_CFG[document.getElementById('sel-contest').value]||CONTEST_CFG.iaru;

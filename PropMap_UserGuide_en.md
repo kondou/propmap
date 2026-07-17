@@ -13,7 +13,7 @@ Useful for planning contest operations, identifying optimal band-change timing, 
 ### System Requirements
 
 - macOS Tahoe / Windows 11 (tested)
-- Python 3 (see "[Python 3 Installation](#python-3-installation)" for setup)
+- Python 3.10+ (auto-detected by the launcher scripts; if absent, guided setup is offered. **No developer environment** — Xcode / Command Line Tools / Visual Studio — is required. See "[Python 3 Installation](#python-3-installation)")
 - Modern browser (Safari, Chrome, Edge, etc.)
 - JSON data files for the contest you want to view (must be placed in `~/heatmap/data/`). [Data must be built in advance — see Section 10](#10-advance-data-preparation)
 
@@ -35,35 +35,29 @@ Useful for planning contest operations, identifying optimal band-change timing, 
 
 ### Python 3 Installation
 
+**In most cases this section is unnecessary.** The launcher scripts (`start_heatmap.command` / `.bat`) and `generate_all` automatically locate a usable Python 3.10+ (`find_python.sh` / `find_python.bat`). If none is found, they offer guided setup: with your consent, **uv** is installed automatically and fetches a standalone Python binary. **Neither path requires a compiler or developer environment** (Xcode / Command Line Tools / Visual Studio) — PropMap uses only the Python standard library.
+
+Detection order: explicit override via the `PROPMAP_PYTHON` environment variable → `python3` on PATH (on macOS the developer-tools stub is safely excluded) → known install locations (Homebrew / python.org) → the macOS-bundled `python3` (only if Command Line Tools are installed) → uv.
+
+To install manually, use either of the following:
+
 #### macOS Tahoe
 
-macOS includes a system Python 3, but it may be replaced by OS updates and `pip` is awkward to use. Homebrew Python is recommended so that additional packages can easily be installed with `pip` when needed by the data processing scripts.
+- **python.org official installer (recommended)**: download and run the macOS installer (universal2 binary) from [python.org](https://www.python.org/downloads/). Requires neither Xcode nor Command Line Tools
+- **uv**: install with `curl -LsSf https://astral.sh/uv/install.sh | sh`; Python itself is fetched as a standalone binary (no building)
+- If you already use Homebrew, `brew install python3` also works. Note that right after a major OS release, bottles (prebuilt binaries) may not yet be available, causing a source-build fallback that demands Xcode — hence the two options above are recommended for PropMap purposes
 
-1. Install Homebrew (if not already installed):
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-2. Install Python 3:
-```bash
-brew install python3
-```
-3. Verify installation:
-```bash
-python3 --version
-```
-`Python 3.x.x` will be displayed on success (x is any number).
+Verify: `python3 --version` shows `Python 3.10` or later.
 
 #### Windows 11 — Without WSL2
 
 The viewer and full data-building pipeline work with Python for Windows and the included `generate_all.bat`. Since `generate_all.sh` is a bash script and cannot be run directly on Windows, use the equivalent `generate_all.bat` instead.
 
 1. Download the Windows installer from [python.org](https://www.python.org/downloads/)
-2. During installation, **check "Add Python to PATH"** (it is unchecked by default — this step is required)
-3. Verify installation (Command Prompt):
-```
-python --version
-```
-`Python 3.x.x` will be displayed on success. If `Python 2.x.x` is shown, check your PATH settings.
+2. During installation, **check "Add Python to PATH"** (unchecked by default — though even without it, the bundled `py` launcher is auto-detected)
+3. Verify (Command Prompt): `py -3 --version` or `python --version` shows `Python 3.10` or later
+
+The Microsoft Store "stub" (the alias that opens the Store when `python` is typed without Python installed) is safely excluded by the auto-detection.
 
 > **Note:** On Windows, use `python` instead of `python3`
 
@@ -509,6 +503,9 @@ generate_all.bat
 | `make_spotted_grids_approx.py` | Extract RBN spotted grids (with cty.dat fallback) |
 | `lookup_cty.py` | Module to look up grid locator from callsign via cty.dat |
 | `download_rbn.py` | Download RBN raw data (zip) |
+| `check_new_logs.py` | Check for newly published contest years, estimate disk usage, and import |
+| `propmap_server.py` | Local server (static files + data-update API, stdlib only) |
+| `update.html` | Data update page (browser front-end for check_new_logs) |
 | `extract_json.py` | Extract records from large JSON by condition (debug) |
 | `fetch_cty.py` | Download cty.dat files (places in `cty_data/`) |
 | `fetch_ssn.py` | Download sunspot number data (SN_m_tot_V2.0.txt) |

@@ -13,7 +13,7 @@ PropMapは、アマチュア無線コンテストの公開ログデータおよ�
 ### 動作環境・必要なもの
 
 - macOS Tahoe / Windows 11（動作確認済み）
-- Python 3（インストール手順は「[Python 3 のインストール](#python-3-のインストール)」参照）
+- Python 3.10 以上（起動スクリプトが自動検出する。未導入でも起動時に案内が出る。Xcode / Command Line Tools / Visual Studio などの**開発環境は不要**。詳細は「[Python 3 のインストール](#python-3-のインストール)」参照）
 - モダンブラウザ（Safari、Chrome、Edge 等）
 - 参照したいコンテストの JSON データファイル（`~/heatmap/data/` に配置済みのこと）。[事前データ準備の章を参照してのデータの作成が必要](#10-事前データ準備)
 
@@ -35,35 +35,29 @@ PropMapは、アマチュア無線コンテストの公開ログデータおよ�
 
 ### Python 3 のインストール
 
+**多くの場合、このセクションの作業は不要。** 起動スクリプト（`start_heatmap.command` / `.bat`）と `generate_all` は、利用可能な Python 3.10 以上を自動で探して使用する（`find_python.sh` / `find_python.bat`）。見つからない場合はその場で導入方法を案内し、同意すれば **uv** を自動インストールして Python 本体も自動調達する。**いずれの方法でもコンパイラや開発環境（Xcode / Command Line Tools / Visual Studio）は不要**（PropMap は Python 標準ライブラリのみで動作するため）
+
+自動検出の優先順位: 環境変数 `PROPMAP_PYTHON` による明示指定 → PATH 上の `python3`（macOSでは開発者ツール未導入時のスタブを安全に除外）→ 既知のインストール場所（Homebrew / python.org）→ macOS 付属の `python3`（Command Line Tools 導入済みの場合のみ）→ uv
+
+手動で導入したい場合は以下のいずれか:
+
 #### macOS Tahoe以降
 
-macOS には OS 自体に Python 3 が付属しているが、OS アップデートで置き換わるリスクや `pip` の利用しづらさがあるため、Homebrew 経由のインストールを推奨する。データ処理スクリプトで追加パッケージが必要になった場合も Homebrew Python であれば `pip` で容易に対応可能
+- **python.org 公式インストーラ（推奨）**: [python.org](https://www.python.org/downloads/) から macOS 用インストーラ（universal2 バイナリ）を取得して実行するだけ。Xcode も Command Line Tools も不要
+- **uv**: `curl -LsSf https://astral.sh/uv/install.sh | sh` で導入。Python 本体はスタンドアロンバイナリとして自動取得される（ビルドなし）
+- Homebrew を既に利用している場合は `brew install python3` でも可。ただし OS のメジャーアップデート直後は bottle（ビルド済みバイナリ）が未提供でソースビルドにフォールバックし、Xcode を要求されることがあるため、PropMap 目的では上の2方式を推奨する
 
-1. Homebrew のインストール（未導入の場合）：
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-2. Python 3 のインストール：
-```bash
-brew install python3
-```
-3. インストール確認：
-```bash
-python3 --version
-```
-`Python 3.x.x` と表示されれば成功（x は任意の数値）
+確認: `python3 --version` で `Python 3.10` 以上が表示されれば成功
 
 #### Windows 11 — WSL2 なし
 
 `heatmap.html`（PropMap 本体）の利用からデータ構築まで、Python for Windows と付属の `generate_all.bat` にて対応。`generate_all.sh` は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う `generate_all.bat` を使用する
 
 1. [python.org](https://www.python.org/downloads/) から Windows 用インストーラを取得する
-2. インストール時に **「Add Python to PATH」にチェックを入れる**（デフォルトではオフのため必須）
-3. インストール確認（コマンドプロンプト）：
-```
-python --version
-```
-`Python 3.x.x` と表示されれば成功。`Python 2.x.x` と表示される場合はPATHの設定を見直すこと
+2. インストール時に **「Add Python to PATH」にチェックを入れる**（デフォルトではオフだが、チェック無しでも付属の `py` ランチャー経由で自動検出される）
+3. インストール確認（コマンドプロンプト）: `py -3 --version` または `python --version` で `Python 3.10` 以上が表示されれば成功
+
+なお Microsoft Store 版 Python の「スタブ」（未導入時に `python` と打つとストアが開くエイリアス）は自動検出で安全に除外される
 
 > **注意:** Windows では `python3` ではなく `python` コマンドを使用すること
 
@@ -90,6 +84,10 @@ python3 --version
 ``` { .no-copy }
 ~/heatmap/
 ├── heatmap.html              メインアプリ（単一ファイル完結）
+├── update.html               データ更新ページ（新規公開ログの確認・取り込み）
+├── propmap_server.py         ローカルサーバー（静的配信 + データ更新API）
+├── find_python.sh            Python 自動検出（macOS/Linux/WSL2用）
+├── find_python.bat           Python 自動検出（Windows用）
 ├── start_heatmap.command     起動スクリプト（macOS用）
 ├── start_heatmap.bat         起動スクリプト（Windows用）
 ├── countries-50m.json        地形データ
@@ -121,18 +119,24 @@ python3 --version
 `start_heatmap.command` をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる
 
 ```bash
-python3 -m http.server 8765 --directory ~/heatmap
+bash ~/heatmap/start_heatmap.command
 ```
+
+（Python の場所を自分で管理している場合は `python3 ~/heatmap/propmap_server.py` の直接起動でもよい）
 
 **Windows (WSL2 なし)**
 
 `start_heatmap.bat` をダブルクリックするか、コマンドプロンプトから以下を実行する
 
 ```
-python -m http.server 8765 --directory %USERPROFILE%\heatmap
+%USERPROFILE%\heatmap\start_heatmap.bat
 ```
 
+（Python の場所を自分で管理している場合は `python %USERPROFILE%\heatmap\propmap_server.py` の直接起動でもよい）
+
 起動後、ブラウザで `http://localhost:8765` にアクセスする
+
+サーバーは `127.0.0.1` にのみバインドされるため、他のPCからはアクセスできない。従来どおり `python3 -m http.server 8765` で起動しても地図表示は動作するが、その場合「データ更新」機能（下記）は使用できない
 
 > **注意:** ローカルのファイルサーバーが必要であるため、`heatmap.html` をブラウザで直接開いても動作しない
 
@@ -517,6 +521,25 @@ generate_all.bat --dry-run
 generate_all.bat
 ```
 
+### 新規開催年の取り込み（check_new_logs.py）
+
+コンテストの新しい開催年が公開されたかを確認し、必要ディスク量の見積もりを確認したうえで取り込むには、**ブラウザからの操作**と**コマンドライン**の2つの方法がある。対象年は開催日程から自動導出されるため、いずれの方法でも年のハードコード更新は不要
+
+**ブラウザから（推奨）**
+
+`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または `http://localhost:8765/update.html` を開く。「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）
+
+**コマンドラインから**
+
+```bash
+cd ~/heatmap/contest_logs
+python3 check_new_logs.py --dry-run   # 有無確認と見積もり表示のみ
+python3 check_new_logs.py             # 見積もり表示 → y/n 確認 → 取り込み実行
+python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
+```
+
+表示される見積もりは「公開ログDLサイズ / RBN zipサイズ / JSON変換後サイズ」の3項目。公開ログとJSONは既存年の実績からの推定値、RBN zipはHEADリクエストによる実測値。空き容量が見積もり合計を下回る場合は実行前に中断される。RBN rawはzipのまま保持され、JSON生成時にのみ一時展開される（従来どおり）
+
 ### 各スクリプトの役割
 
 | スクリプト | 役割 |
@@ -534,6 +557,9 @@ generate_all.bat
 | `make_spotted_grids_approx.py` | RBNスポットグリッドの抽出（cty.dat フォールバック付き） |
 | `lookup_cty.py` | cty.dat からコールサインのグリッドを引くモジュール |
 | `download_rbn.py` | RBN rawデータ（zip）のダウンロード |
+| `check_new_logs.py` | 新規開催年の公開ログ/RBNの有無確認・サイズ見積もり・取り込み |
+| `propmap_server.py` | ローカルサーバー（静的配信 + データ更新API、標準ライブラリのみ） |
+| `update.html` | データ更新ページ（check_new_logs をブラウザから操作） |
 | `extract_json.py` | 大容量JSONから条件を絞って切り出し（デバッグ用） |
 | `fetch_cty.py` | cty.dat 一式をダウンロード（`cty_data/` に配置） |
 | `fetch_ssn.py` | 太陽黒点数データ（SN_m_tot_V2.0.txt）をダウンロード |

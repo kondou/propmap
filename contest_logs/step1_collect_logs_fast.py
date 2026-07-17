@@ -66,6 +66,31 @@ except ImportError:
 
 # ---- コンテスト定義 -------------------------------------------------------
 
+# 年リストの一次情報は contest_utils.available_years()（開催日ベースで自動導出）。
+# import できない場合のみ以下の静的レンジにフォールバックする。
+try:
+    from contest_utils import available_years as _available_years
+except ImportError:
+    _available_years = None
+
+_STATIC_YEARS = {
+    "iaru":      list(range(2018, 2026)),
+    "cqww_cw":   list(range(2005, 2026)),
+    "cqww_ssb":  list(range(2005, 2026)),
+    "cqwpx_cw":  list(range(2008, 2026)),
+    "cqwpx_ssb": list(range(2008, 2026)),
+}
+
+def contest_years(contest_key: str) -> list:
+    if _available_years is not None:
+        try:
+            return _available_years(contest_key)
+        except Exception:
+            pass
+    return _STATIC_YEARS[contest_key]
+
+# 既知の IARU 年別URL（キャッシュ）。未知の年は resolve_iaru_iid() が
+# 既知ページの「Public logs are available for these years:」リンクから自動解決する。
 IARU_YEAR_URLS = {
     2018: "https://contests.arrl.org/publiclogs.php?eid=4&iid=202",
     2019: "https://contests.arrl.org/publiclogs.php?eid=4&iid=683",
@@ -76,6 +101,41 @@ IARU_YEAR_URLS = {
     2024: "https://contests.arrl.org/publiclogs.php?eid=4&iid=1064",
     2025: "https://contests.arrl.org/publiclogs.php?eid=4&iid=1110",
 }
+
+# 年ページ内リンク: <a href="publiclogs.php?eid=4&iid=NNN">YYYY</a>
+_IARU_YEAR_LINK_RE = re.compile(
+    r'href="(?:https?://contests\.arrl\.org/)?publiclogs\.php\?eid=4&(?:amp;)?iid=(\d+)"[^>]*>\s*(\d{4})\s*<',
+    re.IGNORECASE)
+
+_iaru_resolved = False
+
+def resolve_iaru_iid(year: int) -> str | None:
+    """
+    IARU の年別URLを返す。IARU_YEAR_URLS になければ、既知の最新ページを
+    1回取得して年→iidリンク一覧をスクレイプし、IARU_YEAR_URLS を更新する。
+    """
+    global _iaru_resolved
+    if year in IARU_YEAR_URLS:
+        return IARU_YEAR_URLS[year]
+    if _iaru_resolved:
+        return None
+    _iaru_resolved = True
+
+    seed_url = IARU_YEAR_URLS[max(IARU_YEAR_URLS)]
+    html = fetch(seed_url)
+    if not html:
+        return None
+    found = 0
+    for iid, y in _IARU_YEAR_LINK_RE.findall(html):
+        y = int(y)
+        if y not in IARU_YEAR_URLS:
+            IARU_YEAR_URLS[y] = \
+                f"https://contests.arrl.org/publiclogs.php?eid=4&iid={iid}"
+            found += 1
+    if found:
+        print(msg(f"  IARU 年別URLを自動解決: {found}件追加",
+                  f"  IARU year URLs auto-resolved: {found} added"))
+    return IARU_YEAR_URLS.get(year)
 
 SSN_TABLE = {
     "iaru":      {2018:45,2019:68,2020:20,2021:30,2022:95,2023:145,2024:180,2025:160},
@@ -95,31 +155,31 @@ SSN_TABLE = {
 
 CONTEST_DEFS = {
     "iaru": {
-        "years": list(IARU_YEAR_URLS.keys()),
-        "get_list_url": lambda y: IARU_YEAR_URLS.get(y),
+        "years": lambda: contest_years("iaru"),
+        "get_list_url": lambda y: resolve_iaru_iid(y),
         "base_url": "https://contests.arrl.org",
         "log_type": "arrl",
     },
     "cqww_cw": {
-        "years": list(range(2005,2026)),
+        "years": lambda: contest_years("cqww_cw"),
         "get_list_url": lambda y: f"https://cqww.com/publiclogs/{y}cw/",
         "base_url": "https://cqww.com",
         "log_type": "cqdir",
     },
     "cqww_ssb": {
-        "years": list(range(2005,2026)),
+        "years": lambda: contest_years("cqww_ssb"),
         "get_list_url": lambda y: f"https://cqww.com/publiclogs/{y}ph/",
         "base_url": "https://cqww.com",
         "log_type": "cqdir",
     },
     "cqwpx_cw": {
-        "years": list(range(2008,2026)),
+        "years": lambda: contest_years("cqwpx_cw"),
         "get_list_url": lambda y: f"https://cqwpx.com/publiclogs/{y}cw/",
         "base_url": "https://cqwpx.com",
         "log_type": "cqdir",
     },
     "cqwpx_ssb": {
-        "years": list(range(2008,2026)),
+        "years": lambda: contest_years("cqwpx_ssb"),
         "get_list_url": lambda y: f"https://cqwpx.com/publiclogs/{y}ph/",
         "base_url": "https://cqwpx.com",
         "log_type": "cqdir",
@@ -194,7 +254,30 @@ def extract_callsign(text: str) -> str | None:
 _lock = Lock()
 _cnt  = {"done":0,"skip":0,"fail":0}
 
-def download_one(url: str, save_dir: Path, resume: bool) -> str:
+def expected_path_from_url(url: str, save_dir: Path, log_type: str) -> Path | None:
+    """
+    URLから保存先ファイル名を推定する（フェッチ前スキップ用）。
+    cqdir型はURL末尾がほぼコールサイン（例: ja1abc.log → JA1ABC.txt）。
+    CALLSIGNヘッダと不一致の稀なケースは推定パスが存在せず再取得されるだけで安全。
+    arrl型はURLにコールサインを含まないため推定不可（Noneを返す）。
+    """
+    if log_type != "cqdir":
+        return None
+    stem = url.rstrip("/").rsplit("/", 1)[-1]
+    stem = re.sub(r"\.(log|cbr|txt)$", "", stem, flags=re.IGNORECASE)
+    if not stem:
+        return None
+    return save_dir / f"{safe_filename(stem.upper())}.txt"
+
+def download_one(url: str, save_dir: Path, resume: bool,
+                 log_type: str = "cqdir") -> str:
+    # フェッチ前スキップ: URL由来のファイル名が既存ならダウンロード自体を省略
+    if resume:
+        exp = expected_path_from_url(url, save_dir, log_type)
+        if exp is not None and exp.exists():
+            with _lock: _cnt["skip"] += 1
+            return "skip"
+
     content = fetch(url)
     if not content:
         with _lock: _cnt["fail"] += 1
@@ -255,7 +338,8 @@ def collect_year(contest_key: str, year: int, workers: int,
 
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futures = {ex.submit(download_one, u, save_dir, resume): u for u in urls}
+        futures = {ex.submit(download_one, u, save_dir, resume,
+                             defn["log_type"]): u for u in urls}
         for i, fut in enumerate(as_completed(futures), 1):
             fut.result()
             if i % 500 == 0 or i == total:
@@ -301,13 +385,14 @@ def main():
 
     defn = CONTEST_DEFS[args.contest]
 
+    valid_years = defn["years"]()
     if args.all_years:
-        years = defn["years"]
+        years = valid_years
     elif args.years:
-        bad = [y for y in args.years if y not in defn["years"]]
+        bad = [y for y in args.years if y not in valid_years]
         if bad:
-            print(msg(f"対応外の年: {bad}  対応年: {defn['years']}",
-                      f"Unsupported year(s): {bad}  Valid: {defn['years']}"))
+            print(msg(f"対応外の年: {bad}  対応年: {valid_years}",
+                      f"Unsupported year(s): {bad}  Valid: {valid_years}"))
             return
         years = args.years
     else:

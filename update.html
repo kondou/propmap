@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PropMap データ更新</title>
+<style>
+  body { background:#111; color:#ccc; font-family:system-ui,sans-serif;
+         font-size:13px; max-width:860px; margin:0 auto; padding:16px; }
+  h1 { font-size:17px; color:#eee; margin:0 0 4px; }
+  h1 small { font-size:12px; color:#888; font-weight:normal; margin-left:10px; }
+  a { color:#7ab8ff; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .panel { background:#1a1d28; border:1px solid #333a4d; border-radius:8px;
+           padding:12px 14px; margin:12px 0; }
+  .panel h2 { font-size:13px; color:#9db; margin:0 0 8px; }
+  button { background:#2a3550; color:#dde; border:1px solid #446;
+           border-radius:5px; padding:6px 16px; font-size:13px; cursor:pointer; }
+  button:hover:not(:disabled) { background:#354468; }
+  button:disabled { opacity:.4; cursor:default; }
+  button.primary { background:#2f5e3a; border-color:#4a8a58; }
+  button.primary:hover:not(:disabled) { background:#3a7448; }
+  select, label { font-size:13px; }
+  select { background:#222736; color:#ccc; border:1px solid #446;
+           border-radius:4px; padding:3px 6px; }
+  table { border-collapse:collapse; width:100%; margin:8px 0; }
+  th, td { border-bottom:1px solid #2c3242; padding:4px 8px; font-size:12px; }
+  th { color:#8899aa; text-align:left; font-weight:normal; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.total td { border-top:1px solid #556; font-weight:bold; color:#eee; }
+  .note { color:#778; font-size:11px; }
+  .warn { color:#e6b450; }
+  .err  { color:#e66; }
+  .ok   { color:#7c6; }
+  #statusline { font-size:13px; margin:4px 0; }
+  .spin { display:inline-block; width:11px; height:11px; border:2px solid #557;
+          border-top-color:#9cf; border-radius:50%; margin-right:6px;
+          animation:sp 0.8s linear infinite; vertical-align:-1px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  progress { width:100%; height:10px; accent-color:#4a8a58; }
+  pre#logtail { background:#0c0e15; border:1px solid #2c3242; border-radius:6px;
+                padding:8px 10px; height:240px; overflow-y:auto; font-size:11px;
+                line-height:1.5; white-space:pre-wrap; word-break:break-all;
+                color:#aab; margin:8px 0 0; }
+  .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<h1>PropMap データ更新
+  <small><a href="./heatmap.html">← 伝播マップへ戻る</a>（更新中も既存データで表示できます）</small>
+</h1>
+
+<div class="panel">
+  <h2>1. 新規公開ログの確認</h2>
+  <div class="row">
+    <label>対象:
+      <select id="sel-contest">
+        <option value="">すべてのコンテスト</option>
+        <option value="iaru">IARU HF</option>
+        <option value="cqww_cw">CQ WW CW</option>
+        <option value="cqww_ssb">CQ WW SSB</option>
+        <option value="cqwpx_cw">CQ WPX CW</option>
+        <option value="cqwpx_ssb">CQ WPX SSB</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="chk-allmissing">
+      過去の未保持年もすべて対象にする</label>
+    <button id="btn-check">確認する</button>
+  </div>
+  <div id="checkresult"></div>
+</div>
+
+<div class="panel" id="panel-estimate" style="display:none;">
+  <h2>2. ディスク使用量見積もり</h2>
+  <div id="estimate"></div>
+  <div id="diskline"></div>
+  <div class="note">※ 公開ログ・JSONサイズは既存年の実績からの推定値。
+    RBN zip は HEAD による実測（「推定」表記の行を除く）。
+    RBNのJSON生成時には一時展開のためさらに空きが必要です。</div>
+  <div style="margin-top:10px;">
+    <button id="btn-import" class="primary">ダウンロードと取り込みを実行</button>
+  </div>
+</div>
+
+<div class="panel" id="panel-progress" style="display:none;">
+  <h2>3. 実行状況</h2>
+  <div id="statusline"></div>
+  <progress id="prog" max="1" value="0"></progress>
+  <pre id="logtail"></pre>
+  <div class="note">このページを閉じても処理はサーバー側で継続します。
+    再度開けば進捗表示に復帰します（起動したターミナルを閉じると停止します）。</div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const fmtB = n => {
+  if (n == null) return '-';
+  const u = ['B','KB','MB','GB','TB']; let i = 0;
+  while (n >= 1024 && i < u.length-1) { n /= 1024; i++; }
+  return (i ? n.toFixed(1) : n) + u[i];
+};
+const fmtSec = s => {
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), ss = s%60;
+  return (h ? h+'h' : '') + (h||m ? m+'m' : '') + ss + 's';
+};
+
+let pollTimer = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+function renderEstimate(st) {
+  const est = st.estimate;
+  const box = $('estimate');
+  if (!st.targets.length) {
+    $('panel-estimate').style.display = 'none';
+    return;
+  }
+  let h = '<table><tr><th>コンテスト</th><th>年</th><th class="num">局数</th>' +
+          '<th class="num">公開ログ</th><th class="num">RBN zip</th>' +
+          '<th class="num">JSON</th><th class="num">小計</th></tr>';
+  for (const r of est.rows) {
+    const rbn = r.rbn_bytes == null ? '-'
+              : fmtB(r.rbn_bytes) + (r.rbn_exact ? '' : ' <span class="warn">(推定)</span>');
+    h += `<tr><td>${r.label}</td><td>${r.year}</td>` +
+         `<td class="num">${r.logs.toLocaleString()}</td>` +
+         `<td class="num">${fmtB(r.logs_bytes)}</td>` +
+         `<td class="num">${rbn}</td>` +
+         `<td class="num">${fmtB(r.json_bytes)}</td>` +
+         `<td class="num">${fmtB(r.subtotal)}</td></tr>`;
+  }
+  h += `<tr class="total"><td colspan="6">合計</td>` +
+       `<td class="num">${fmtB(est.total)}</td></tr></table>`;
+  box.innerHTML = h;
+
+  const dl = $('diskline');
+  if (est.free < est.total) {
+    dl.innerHTML = `<span class="err">空き容量 ${fmtB(est.free)} が見積もり合計を` +
+                   `下回っています。実行できません。</span>`;
+    $('btn-import').disabled = true;
+  } else if (est.free < est.total * 2) {
+    dl.innerHTML = `空き容量: ${fmtB(est.free)} ` +
+                   `<span class="warn">（見積もりの2倍未満。一時展開分に注意）</span>`;
+    $('btn-import').disabled = false;
+  } else {
+    dl.textContent = `空き容量: ${fmtB(est.free)}`;
+    $('btn-import').disabled = false;
+  }
+  $('panel-estimate').style.display = '';
+}
+
+function renderCheckResult(st) {
+  const box = $('checkresult');
+  let h = '';
+  for (const u of st.unpublished)
+    h += `<div>${u.label} ${u.year}: <span class="note">未公開</span></div>`;
+  for (const t of st.targets)
+    h += `<div>${t.label} ${t.year}: <span class="ok">公開済み` +
+         ` (${t.logs.toLocaleString()}局)</span></div>`;
+  if (!st.targets.length && !st.unpublished.length)
+    h = '<div class="note">新規に取り込める公開ログはありません。</div>';
+  else if (!st.targets.length)
+    h += '<div class="note">取り込み対象はありません。</div>';
+  box.innerHTML = h;
+}
+
+function render(st) {
+  const busy = st.state === 'checking' || st.state === 'running';
+  $('btn-check').disabled = busy;
+
+  if (st.state === 'checking') {
+    $('checkresult').innerHTML =
+      '<div><span class="spin"></span>公開ログサイトを確認中...</div>';
+    $('panel-estimate').style.display = 'none';
+  }
+  if (st.state === 'ready') {
+    renderCheckResult(st);
+    renderEstimate(st);
+  }
+  if (st.state === 'running' || st.state === 'done' ||
+      (st.state === 'error' && st.steps_total > 0)) {
+    renderCheckResult(st);
+    if (st.estimate) renderEstimate(st);
+    $('btn-import').disabled = true;
+    $('panel-progress').style.display = '';
+    const sl = $('statusline');
+    if (st.state === 'running') {
+      sl.innerHTML = `<span class="spin"></span>実行中 ` +
+        `[${st.step_index}/${st.steps_total}] ${st.step_label} ` +
+        `<span class="note">経過 ${fmtSec(st.elapsed_sec)}</span>`;
+    } else if (st.state === 'done') {
+      sl.innerHTML = `<span class="ok">完了しました</span> ` +
+        `<span class="note">所要 ${fmtSec(st.elapsed_sec)}。` +
+        `伝播マップに戻ると新しい年が選択できます。</span>`;
+    } else {
+      sl.innerHTML = `<span class="err">エラー: ${st.error || ''}</span>` +
+        ` <span class="note">（ログ参照）</span>`;
+    }
+    $('prog').value = st.steps_total ? st.step_index / st.steps_total : 0;
+    const pre = $('logtail');
+    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+    pre.textContent = (st.log_tail || []).join('\n');
+    if (atBottom) pre.scrollTop = pre.scrollHeight;
+  }
+  if (st.state === 'error' && st.steps_total === 0) {
+    $('checkresult').innerHTML =
+      `<div class="err">エラー: ${st.error || ''}</div>`;
+  }
+
+  if (busy) startPolling(); else stopPolling();
+}
+
+function startPolling() {
+  if (!pollTimer) pollTimer = setInterval(refresh, 2000);
+}
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+async function refresh() {
+  try { render(await api('/api/new-logs/status')); }
+  catch (e) {
+    stopPolling();
+    $('checkresult').innerHTML =
+      `<div class="err">サーバーに接続できません: ${e.message}<br>` +
+      `<span class="note">start_heatmap（propmap_server.py）で起動した` +
+      `サーバーが必要です。python3 -m http.server では更新機能は使えません。` +
+      `</span></div>`;
+  }
+}
+
+$('btn-check').onclick = async () => {
+  const body = { all_missing: $('chk-allmissing').checked };
+  const c = $('sel-contest').value;
+  if (c) body.contest = c;
+  try {
+    await api('/api/new-logs/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    refresh();
+  } catch (e) { alert('確認を開始できません: ' + e.message); }
+};
+
+$('btn-import').onclick = async () => {
+  if (!confirm('見積もり表の内容でダウンロードと取り込みを実行します。よろしいですか?'))
+    return;
+  try {
+    await api('/api/new-logs/import', { method: 'POST' });
+    refresh();
+  } catch (e) { alert('実行を開始できません: ' + e.message); }
+};
+
+refresh();   // 再訪時に実行中ジョブへ復帰
+</script>
+</body>
+</html>

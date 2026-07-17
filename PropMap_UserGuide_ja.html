@@ -107,7 +107,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <h3 id="_1">動作環境・必要なもの</h3>
 <ul>
 <li>macOS Tahoe / Windows 11（動作確認済み）</li>
-<li>Python 3（インストール手順は「<a href="#python-3-のインストール">Python 3 のインストール</a>」参照）</li>
+<li>Python 3.10 以上（起動スクリプトが自動検出する。未導入でも起動時に案内が出る。Xcode / Command Line Tools / Visual Studio などの<strong>開発環境は不要</strong>。詳細は「<a href="#python-3-のインストール">Python 3 のインストール</a>」参照）</li>
 <li>モダンブラウザ（Safari、Chrome、Edge 等）</li>
 <li>参照したいコンテストの JSON データファイル（<code>~/heatmap/data/</code> に配置済みのこと）。<a href="#10-事前データ準備">事前データ準備の章を参照してのデータの作成が必要</a></li>
 </ul>
@@ -127,34 +127,24 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <hr />
 <h2 id="2">2. セットアップ</h2>
 <h3 id="python-3">Python 3 のインストール</h3>
+<p><strong>多くの場合、このセクションの作業は不要。</strong> 起動スクリプト（<code>start_heatmap.command</code> / <code>.bat</code>）と <code>generate_all</code> は、利用可能な Python 3.10 以上を自動で探して使用する（<code>find_python.sh</code> / <code>find_python.bat</code>）。見つからない場合はその場で導入方法を案内し、同意すれば <strong>uv</strong> を自動インストールして Python 本体も自動調達する。<strong>いずれの方法でもコンパイラや開発環境（Xcode / Command Line Tools / Visual Studio）は不要</strong>（PropMap は Python 標準ライブラリのみで動作するため）</p>
+<p>自動検出の優先順位: 環境変数 <code>PROPMAP_PYTHON</code> による明示指定 → PATH 上の <code>python3</code>（macOSでは開発者ツール未導入時のスタブを安全に除外）→ 既知のインストール場所（Homebrew / python.org）→ macOS 付属の <code>python3</code>（Command Line Tools 導入済みの場合のみ）→ uv</p>
+<p>手動で導入したい場合は以下のいずれか:</p>
 <h4 id="macos-tahoe">macOS Tahoe以降</h4>
-<p>macOS には OS 自体に Python 3 が付属しているが、OS アップデートで置き換わるリスクや <code>pip</code> の利用しづらさがあるため、Homebrew 経由のインストールを推奨する。データ処理スクリプトで追加パッケージが必要になった場合も Homebrew Python であれば <code>pip</code> で容易に対応可能</p>
-<ol>
-<li>Homebrew のインストール（未導入の場合）：</li>
-</ol>
-<pre><code class="language-bash">/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;
-</code></pre>
-<ol>
-<li>Python 3 のインストール：</li>
-</ol>
-<pre><code class="language-bash">brew install python3
-</code></pre>
-<ol>
-<li>インストール確認：</li>
-</ol>
-<pre><code class="language-bash">python3 --version
-</code></pre>
-<p><code>Python 3.x.x</code> と表示されれば成功（x は任意の数値）</p>
+<ul>
+<li><strong>python.org 公式インストーラ（推奨）</strong>: <a href="https://www.python.org/downloads/">python.org</a> から macOS 用インストーラ（universal2 バイナリ）を取得して実行するだけ。Xcode も Command Line Tools も不要</li>
+<li><strong>uv</strong>: <code>curl -LsSf https://astral.sh/uv/install.sh | sh</code> で導入。Python 本体はスタンドアロンバイナリとして自動取得される（ビルドなし）</li>
+<li>Homebrew を既に利用している場合は <code>brew install python3</code> でも可。ただし OS のメジャーアップデート直後は bottle（ビルド済みバイナリ）が未提供でソースビルドにフォールバックし、Xcode を要求されることがあるため、PropMap 目的では上の2方式を推奨する</li>
+</ul>
+<p>確認: <code>python3 --version</code> で <code>Python 3.10</code> 以上が表示されれば成功</p>
 <h4 id="windows-11-wsl2">Windows 11 — WSL2 なし</h4>
 <p><code>heatmap.html</code>（PropMap 本体）の利用からデータ構築まで、Python for Windows と付属の <code>generate_all.bat</code> にて対応。<code>generate_all.sh</code> は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う <code>generate_all.bat</code> を使用する</p>
 <ol>
 <li><a href="https://www.python.org/downloads/">python.org</a> から Windows 用インストーラを取得する</li>
-<li>インストール時に <strong>「Add Python to PATH」にチェックを入れる</strong>（デフォルトではオフのため必須）</li>
-<li>インストール確認（コマンドプロンプト）：</li>
+<li>インストール時に <strong>「Add Python to PATH」にチェックを入れる</strong>（デフォルトではオフだが、チェック無しでも付属の <code>py</code> ランチャー経由で自動検出される）</li>
+<li>インストール確認（コマンドプロンプト）: <code>py -3 --version</code> または <code>python --version</code> で <code>Python 3.10</code> 以上が表示されれば成功</li>
 </ol>
-<pre><code>python --version
-</code></pre>
-<p><code>Python 3.x.x</code> と表示されれば成功。<code>Python 2.x.x</code> と表示される場合はPATHの設定を見直すこと</p>
+<p>なお Microsoft Store 版 Python の「スタブ」（未導入時に <code>python</code> と打つとストアが開くエイリアス）は自動検出で安全に除外される</p>
 <blockquote>
 <p><strong>注意:</strong> Windows では <code>python3</code> ではなく <code>python</code> コマンドを使用すること</p>
 </blockquote>
@@ -171,6 +161,10 @@ python3 --version
 <p>すべてのファイルは <code>~/heatmap/</code>（macOS/Linux/WSL2）または <code>%USERPROFILE%\heatmap\</code>（Windows）以下に配置する。リポジトリに含まれるファイルのほか、パイプライン初回実行時に fetch スクリプトが自動取得するファイル（★）とデータ構築スクリプトが生成するファイル（☆）がある。</p>
 <pre><code class="language-no-copy">~/heatmap/
 ├── heatmap.html              メインアプリ（単一ファイル完結）
+├── update.html               データ更新ページ（新規公開ログの確認・取り込み）
+├── propmap_server.py         ローカルサーバー（静的配信 + データ更新API）
+├── find_python.sh            Python 自動検出（macOS/Linux/WSL2用）
+├── find_python.bat           Python 自動検出（Windows用）
 ├── start_heatmap.command     起動スクリプト（macOS用）
 ├── start_heatmap.bat         起動スクリプト（Windows用）
 ├── countries-50m.json        地形データ
@@ -197,13 +191,16 @@ python3 --version
 <h3 id="_4">起動方法</h3>
 <p><strong>macOS / Windows (WSL2 あり)</strong></p>
 <p><code>start_heatmap.command</code> をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる</p>
-<pre><code class="language-bash">python3 -m http.server 8765 --directory ~/heatmap
+<pre><code class="language-bash">bash ~/heatmap/start_heatmap.command
 </code></pre>
+<p>（Python の場所を自分で管理している場合は <code>python3 ~/heatmap/propmap_server.py</code> の直接起動でもよい）</p>
 <p><strong>Windows (WSL2 なし)</strong></p>
 <p><code>start_heatmap.bat</code> をダブルクリックするか、コマンドプロンプトから以下を実行する</p>
-<pre><code>python -m http.server 8765 --directory %USERPROFILE%\heatmap
+<pre><code>%USERPROFILE%\heatmap\start_heatmap.bat
 </code></pre>
+<p>（Python の場所を自分で管理している場合は <code>python %USERPROFILE%\heatmap\propmap_server.py</code> の直接起動でもよい）</p>
 <p>起動後、ブラウザで <code>http://localhost:8765</code> にアクセスする</p>
+<p>サーバーは <code>127.0.0.1</code> にのみバインドされるため、他のPCからはアクセスできない。従来どおり <code>python3 -m http.server 8765</code> で起動しても地図表示は動作するが、その場合「データ更新」機能（下記）は使用できない</p>
 <blockquote>
 <p><strong>注意:</strong> ローカルのファイルサーバーが必要であるため、<code>heatmap.html</code> をブラウザで直接開いても動作しない</p>
 </blockquote>
@@ -591,6 +588,17 @@ step5_rbn.py                    CSV → JSON集約（heatmap.html用）
 <p>本実行：</p>
 <pre><code>generate_all.bat
 </code></pre>
+<h3 id="check_new_logspy">新規開催年の取り込み（check_new_logs.py）</h3>
+<p>コンテストの新しい開催年が公開されたかを確認し、必要ディスク量の見積もりを確認したうえで取り込むには、<strong>ブラウザからの操作</strong>と<strong>コマンドライン</strong>の2つの方法がある。対象年は開催日程から自動導出されるため、いずれの方法でも年のハードコード更新は不要</p>
+<p><strong>ブラウザから（推奨）</strong></p>
+<p><code>start_heatmap</code> で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または <code>http://localhost:8765/update.html</code> を開く。「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）</p>
+<p><strong>コマンドラインから</strong></p>
+<pre><code class="language-bash">cd ~/heatmap/contest_logs
+python3 check_new_logs.py --dry-run   # 有無確認と見積もり表示のみ
+python3 check_new_logs.py             # 見積もり表示 → y/n 確認 → 取り込み実行
+python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
+</code></pre>
+<p>表示される見積もりは「公開ログDLサイズ / RBN zipサイズ / JSON変換後サイズ」の3項目。公開ログとJSONは既存年の実績からの推定値、RBN zipはHEADリクエストによる実測値。空き容量が見積もり合計を下回る場合は実行前に中断される。RBN rawはzipのまま保持され、JSON生成時にのみ一時展開される（従来どおり）</p>
 <h3 id="_22">各スクリプトの役割</h3>
 <table>
 <thead>
@@ -651,6 +659,18 @@ step5_rbn.py                    CSV → JSON集約（heatmap.html用）
 <tr>
 <td><code>download_rbn.py</code></td>
 <td>RBN rawデータ（zip）のダウンロード</td>
+</tr>
+<tr>
+<td><code>check_new_logs.py</code></td>
+<td>新規開催年の公開ログ/RBNの有無確認・サイズ見積もり・取り込み</td>
+</tr>
+<tr>
+<td><code>propmap_server.py</code></td>
+<td>ローカルサーバー（静的配信 + データ更新API、標準ライブラリのみ）</td>
+</tr>
+<tr>
+<td><code>update.html</code></td>
+<td>データ更新ページ（check_new_logs をブラウザから操作）</td>
 </tr>
 <tr>
 <td><code>extract_json.py</code></td>

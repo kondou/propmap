@@ -19,11 +19,17 @@ REM   step1       raw\{contest}_{year}\ に .txt があればスキップ
 REM   その他      出力ファイルが存在すればスキップ
 REM   download_rbn は内部スキップのため常に呼ぶ
 REM
-REM 注意: Python が PATH にある必要があります
-
 set "SCRIPT_DIR=%~dp0"
 set "HEATMAP_DIR=%SCRIPT_DIR%.."
 set "LOG_FILE=%SCRIPT_DIR%generate_all.log"
+
+REM ---- Python 解決 -----------------------------------------------------------
+REM 開発環境の有無を意識せずに実行できるよう find_python.bat で解決する
+call "%HEATMAP_DIR%\find_python.bat"
+if not defined PYTHON (
+    echo !!! Python が見つかりません。案内に従って導入後、再度実行してください。 1>&2
+    exit /b 1
+)
 
 REM ---- Language detection --------------------------------------------------
 set _L=en
@@ -91,15 +97,15 @@ echo. >> "%LOG_FILE%"
 echo !_TS!  ==== fetch_cty ==== >> "%LOG_FILE%"
 
 if %FORCE%==1 (
-    echo   ^>^>^> python "%HEATMAP_DIR%\fetch_cty.py" --force
+    echo   ^>^>^> %PYTHON% "%HEATMAP_DIR%\fetch_cty.py" --force
 ) else (
-    echo   ^>^>^> python "%HEATMAP_DIR%\fetch_cty.py"
+    echo   ^>^>^> %PYTHON% "%HEATMAP_DIR%\fetch_cty.py"
 )
 if %DRY_RUN%==0 (
     if %FORCE%==1 (
-        python "%HEATMAP_DIR%\fetch_cty.py" --force > "%TEMP%\gall_step.txt" 2>&1
+        %PYTHON% "%HEATMAP_DIR%\fetch_cty.py" --force > "%TEMP%\gall_step.txt" 2>&1
     ) else (
-        python "%HEATMAP_DIR%\fetch_cty.py" > "%TEMP%\gall_step.txt" 2>&1
+        %PYTHON% "%HEATMAP_DIR%\fetch_cty.py" > "%TEMP%\gall_step.txt" 2>&1
     )
     set _RC=!ERRORLEVEL!
     type "%TEMP%\gall_step.txt"
@@ -116,35 +122,13 @@ if %DRY_RUN%==0 (
 )
 
 REM ---- Main loops ----------------------------------------------------------
+REM コンテスト×年の一覧は contest_utils.py --list から取得する
+REM （first_year と開催日程から自動導出。年のハードコードはしない）
 
-for /l %%y in (2018,1,2025) do (
+for /f "usebackq tokens=1,2,3" %%a in (`%PYTHON% "%SCRIPT_DIR%contest_utils.py" --list`) do (
     echo.
-    echo ======== iaru %%y ========
-    call :run_contest iaru %%y 1
-)
-
-for /l %%y in (2005,1,2025) do (
-    echo.
-    echo ======== cqww_cw %%y ========
-    call :run_contest cqww_cw %%y 1
-)
-
-for /l %%y in (2005,1,2025) do (
-    echo.
-    echo ======== cqww_ssb %%y ========
-    call :run_contest cqww_ssb %%y 0
-)
-
-for /l %%y in (2008,1,2025) do (
-    echo.
-    echo ======== cqwpx_cw %%y ========
-    call :run_contest cqwpx_cw %%y 1
-)
-
-for /l %%y in (2008,1,2025) do (
-    echo.
-    echo ======== cqwpx_ssb %%y ========
-    call :run_contest cqwpx_ssb %%y 0
+    echo ======== %%a %%b ========
+    call :run_contest %%a %%b %%c
 )
 
 REM ---- Done ----------------------------------------------------------------
@@ -181,7 +165,7 @@ REM --- step1: ログ収集 ---
 set "_LABEL=step1 !_C! !_Y!"
 set "_OUTCHECK=%SCRIPT_DIR%raw\!_C!_!_Y!"
 set _OUTTYPE=dir
-set "_CMD=python "%SCRIPT_DIR%step1_collect_logs_fast.py" --contest !_C! --year !_Y!"
+set "_CMD=%PYTHON% "%SCRIPT_DIR%step1_collect_logs_fast.py" --contest !_C! --year !_Y!"
 call :run_step
 
 REM --- download_rbn: 内部スキップあり（RBNあり時のみ）---
@@ -189,7 +173,7 @@ if "!_HAS_RBN!"=="1" (
     set "_LABEL=download_rbn !_C! !_Y!"
     set _OUTCHECK=
     set _OUTTYPE=file
-    set "_CMD=python "%SCRIPT_DIR%download_rbn.py" --contest !_C! --year !_Y!"
+    set "_CMD=%PYTHON% "%SCRIPT_DIR%download_rbn.py" --contest !_C! --year !_Y!"
     call :run_step
 )
 
@@ -198,7 +182,7 @@ if "!_HAS_RBN!"=="1" (
     set "_LABEL=make_spotted_grids !_C! !_Y!"
     set "_OUTCHECK=%SCRIPT_DIR%rbn\!_C!_!_Y!_spotted_grids.csv"
     set _OUTTYPE=file
-    set "_CMD=python "%SCRIPT_DIR%make_spotted_grids.py" --contest !_C! --year !_Y!"
+    set "_CMD=%PYTHON% "%SCRIPT_DIR%make_spotted_grids.py" --contest !_C! --year !_Y!"
     call :run_step
 )
 
@@ -206,33 +190,33 @@ REM --- make_spotted_grids_approx（全コンテスト: step4_crosscheck_approx 
 set "_LABEL=make_spotted_grids_approx !_C! !_Y!"
 set "_OUTCHECK=%SCRIPT_DIR%rbn\!_C!_!_Y!_spotted_grids_approx.csv"
 set _OUTTYPE=file
-set "_CMD=python "%SCRIPT_DIR%make_spotted_grids_approx.py" --contest !_C! --year !_Y!"
+set "_CMD=%PYTHON% "%SCRIPT_DIR%make_spotted_grids_approx.py" --contest !_C! --year !_Y!"
 call :run_step
 
 REM --- QSO クロスチェック → JSON ---
 set "_LABEL=step4_crosscheck !_C! !_Y!"
 set "_OUTCHECK=%SCRIPT_DIR%csv\!_C!_!_Y!_qso_pairs.csv"
 set _OUTTYPE=file
-set "_CMD=python "%SCRIPT_DIR%step4_crosscheck.py" --contest !_C! --year !_Y! --max-call-dist 2 --band-fix-window 15 --annotate-logs"
+set "_CMD=%PYTHON% "%SCRIPT_DIR%step4_crosscheck.py" --contest !_C! --year !_Y! --max-call-dist 2 --band-fix-window 15 --annotate-logs"
 call :run_step
 
 set "_LABEL=step5_aggregate !_C! !_Y!"
 set "_OUTCHECK=%HEATMAP_DIR%\data\!_C!_!_Y!.json"
 set _OUTTYPE=file
-set "_CMD=python "%SCRIPT_DIR%step5_aggregate.py" --contest !_C! --year !_Y!"
+set "_CMD=%PYTHON% "%SCRIPT_DIR%step5_aggregate.py" --contest !_C! --year !_Y!"
 call :run_step
 
 REM --- approx クロスチェック → JSON ---
 set "_LABEL=step4_crosscheck_approx !_C! !_Y!"
 set "_OUTCHECK=%SCRIPT_DIR%csv\!_C!_!_Y!_qso_pairs_approx.csv"
 set _OUTTYPE=file
-set "_CMD=python "%SCRIPT_DIR%step4_crosscheck_approx.py" --contest !_C! --year !_Y! --max-call-dist 2 --band-fix-window 15 --annotate-logs"
+set "_CMD=%PYTHON% "%SCRIPT_DIR%step4_crosscheck_approx.py" --contest !_C! --year !_Y! --max-call-dist 2 --band-fix-window 15 --annotate-logs"
 call :run_step
 
 set "_LABEL=step5_aggregate_approx !_C! !_Y!"
 set "_OUTCHECK=%HEATMAP_DIR%\data\!_C!_!_Y!_approx.json"
 set _OUTTYPE=file
-set "_CMD=python "%SCRIPT_DIR%step5_aggregate.py" --contest !_C! --year !_Y! --input "%SCRIPT_DIR%csv\!_C!_!_Y!_qso_pairs_approx.csv" --output "%HEATMAP_DIR%\data\!_C!_!_Y!_approx.json""
+set "_CMD=%PYTHON% "%SCRIPT_DIR%step5_aggregate.py" --contest !_C! --year !_Y! --input "%SCRIPT_DIR%csv\!_C!_!_Y!_qso_pairs_approx.csv" --output "%HEATMAP_DIR%\data\!_C!_!_Y!_approx.json""
 call :run_step
 
 REM --- RBN → JSON / RBN approx → JSON（RBNあり時のみ）---
@@ -240,25 +224,25 @@ if "!_HAS_RBN!"=="1" (
     set "_LABEL=step4_rbn !_C! !_Y!"
     set "_OUTCHECK=%SCRIPT_DIR%csv\!_C!_!_Y!_rbn_pairs.csv"
     set _OUTTYPE=file
-    set "_CMD=python "%SCRIPT_DIR%step4_rbn.py" --contest !_C! --year !_Y!"
+    set "_CMD=%PYTHON% "%SCRIPT_DIR%step4_rbn.py" --contest !_C! --year !_Y!"
     call :run_step
 
     set "_LABEL=step5_rbn !_C! !_Y!"
     set "_OUTCHECK=%HEATMAP_DIR%\data\!_C!_!_Y!_rbn.json"
     set _OUTTYPE=file
-    set "_CMD=python "%SCRIPT_DIR%step5_rbn.py" --contest !_C! --year !_Y!"
+    set "_CMD=%PYTHON% "%SCRIPT_DIR%step5_rbn.py" --contest !_C! --year !_Y!"
     call :run_step
 
     set "_LABEL=step4_rbn_approx !_C! !_Y!"
     set "_OUTCHECK=%SCRIPT_DIR%csv\!_C!_!_Y!_rbn_pairs_approx.csv"
     set _OUTTYPE=file
-    set "_CMD=python "%SCRIPT_DIR%step4_rbn_approx.py" --contest !_C! --year !_Y!"
+    set "_CMD=%PYTHON% "%SCRIPT_DIR%step4_rbn_approx.py" --contest !_C! --year !_Y!"
     call :run_step
 
     set "_LABEL=step5_rbn_approx !_C! !_Y!"
     set "_OUTCHECK=%HEATMAP_DIR%\data\!_C!_!_Y!_rbn_approx.json"
     set _OUTTYPE=file
-    set "_CMD=python "%SCRIPT_DIR%step5_rbn.py" --contest !_C! --year !_Y! --input "%SCRIPT_DIR%csv\!_C!_!_Y!_rbn_pairs_approx.csv" --output "%HEATMAP_DIR%\data\!_C!_!_Y!_rbn_approx.json""
+    set "_CMD=%PYTHON% "%SCRIPT_DIR%step5_rbn.py" --contest !_C! --year !_Y! --input "%SCRIPT_DIR%csv\!_C!_!_Y!_rbn_pairs_approx.csv" --output "%HEATMAP_DIR%\data\!_C!_!_Y!_rbn_approx.json""
     call :run_step
 )
 exit /b 0
@@ -333,5 +317,5 @@ REM --------------------------------------------------------------------------
 REM :get_ts  — sets _TS to current timestamp (YYYY-MM-DD HH:MM:SS)
 REM --------------------------------------------------------------------------
 :get_ts
-for /f "tokens=*" %%t in ('python -c "from datetime import datetime; print(datetime.now().strftime(\"%%Y-%%m-%%d %%H:%%M:%%S\"))"') do set _TS=%%t
+for /f "tokens=*" %%t in ('%PYTHON% -c "from datetime import datetime; print(datetime.now().strftime(\"%%Y-%%m-%%d %%H:%%M:%%S\"))"') do set _TS=%%t
 exit /b 0

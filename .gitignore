@@ -17,6 +17,7 @@ __pycache__/
 
 # Large generated/downloaded data (built locally with pipeline scripts)
 data/
+cty_data/
 contest_logs/raw/
 contest_logs/csv/
 contest_logs/rbn/
@@ -31,10 +32,20 @@ images/
 # Working / internal files
 heatmap_working.html
 handover_to_claudecode.md
+CLAUDE_HANDOFF_*.md
 contest_logs/README.txt
 contest_logs/regenerate_all_rbn.sh
+contest_logs/generate_all_tmp.sh
 generate_guides.py
 fetch_qrz.py
+.claude-session
+JA1ABC_dump.html
+W1AW_dump.html
+discrepant_calls.txt
+no_locator_calls.txt
+qrz_cache.db
+survey_locators.py
+色スケール説明.md
 
 # Claude Code internal
 .claude/

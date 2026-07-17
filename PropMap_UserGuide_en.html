@@ -107,7 +107,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <h3 id="system-requirements">System Requirements</h3>
 <ul>
 <li>macOS Tahoe / Windows 11 (tested)</li>
-<li>Python 3 (see "<a href="#python-3-installation">Python 3 Installation</a>" for setup)</li>
+<li>Python 3.10+ (auto-detected by the launcher scripts; if absent, guided setup is offered. <strong>No developer environment</strong> — Xcode / Command Line Tools / Visual Studio — is required. See "<a href="#python-3-installation">Python 3 Installation</a>")</li>
 <li>Modern browser (Safari, Chrome, Edge, etc.)</li>
 <li>JSON data files for the contest you want to view (must be placed in <code>~/heatmap/data/</code>). <a href="#10-advance-data-preparation">Data must be built in advance — see Section 10</a></li>
 </ul>
@@ -127,34 +127,24 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <hr />
 <h2 id="2-setup">2. Setup</h2>
 <h3 id="python-3-installation">Python 3 Installation</h3>
+<p><strong>In most cases this section is unnecessary.</strong> The launcher scripts (<code>start_heatmap.command</code> / <code>.bat</code>) and <code>generate_all</code> automatically locate a usable Python 3.10+ (<code>find_python.sh</code> / <code>find_python.bat</code>). If none is found, they offer guided setup: with your consent, <strong>uv</strong> is installed automatically and fetches a standalone Python binary. <strong>Neither path requires a compiler or developer environment</strong> (Xcode / Command Line Tools / Visual Studio) — PropMap uses only the Python standard library.</p>
+<p>Detection order: explicit override via the <code>PROPMAP_PYTHON</code> environment variable → <code>python3</code> on PATH (on macOS the developer-tools stub is safely excluded) → known install locations (Homebrew / python.org) → the macOS-bundled <code>python3</code> (only if Command Line Tools are installed) → uv.</p>
+<p>To install manually, use either of the following:</p>
 <h4 id="macos-tahoe">macOS Tahoe</h4>
-<p>macOS includes a system Python 3, but it may be replaced by OS updates and <code>pip</code> is awkward to use. Homebrew Python is recommended so that additional packages can easily be installed with <code>pip</code> when needed by the data processing scripts.</p>
-<ol>
-<li>Install Homebrew (if not already installed):</li>
-</ol>
-<pre><code class="language-bash">/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;
-</code></pre>
-<ol>
-<li>Install Python 3:</li>
-</ol>
-<pre><code class="language-bash">brew install python3
-</code></pre>
-<ol>
-<li>Verify installation:</li>
-</ol>
-<pre><code class="language-bash">python3 --version
-</code></pre>
-<p><code>Python 3.x.x</code> will be displayed on success (x is any number).</p>
+<ul>
+<li><strong>python.org official installer (recommended)</strong>: download and run the macOS installer (universal2 binary) from <a href="https://www.python.org/downloads/">python.org</a>. Requires neither Xcode nor Command Line Tools</li>
+<li><strong>uv</strong>: install with <code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>; Python itself is fetched as a standalone binary (no building)</li>
+<li>If you already use Homebrew, <code>brew install python3</code> also works. Note that right after a major OS release, bottles (prebuilt binaries) may not yet be available, causing a source-build fallback that demands Xcode — hence the two options above are recommended for PropMap purposes</li>
+</ul>
+<p>Verify: <code>python3 --version</code> shows <code>Python 3.10</code> or later.</p>
 <h4 id="windows-11-without-wsl2">Windows 11 — Without WSL2</h4>
 <p>The viewer and full data-building pipeline work with Python for Windows and the included <code>generate_all.bat</code>. Since <code>generate_all.sh</code> is a bash script and cannot be run directly on Windows, use the equivalent <code>generate_all.bat</code> instead.</p>
 <ol>
 <li>Download the Windows installer from <a href="https://www.python.org/downloads/">python.org</a></li>
-<li>During installation, <strong>check "Add Python to PATH"</strong> (it is unchecked by default — this step is required)</li>
-<li>Verify installation (Command Prompt):</li>
+<li>During installation, <strong>check "Add Python to PATH"</strong> (unchecked by default — though even without it, the bundled <code>py</code> launcher is auto-detected)</li>
+<li>Verify (Command Prompt): <code>py -3 --version</code> or <code>python --version</code> shows <code>Python 3.10</code> or later</li>
 </ol>
-<pre><code>python --version
-</code></pre>
-<p><code>Python 3.x.x</code> will be displayed on success. If <code>Python 2.x.x</code> is shown, check your PATH settings.</p>
+<p>The Microsoft Store "stub" (the alias that opens the Store when <code>python</code> is typed without Python installed) is safely excluded by the auto-detection.</p>
 <blockquote>
 <p><strong>Note:</strong> On Windows, use <code>python</code> instead of <code>python3</code></p>
 </blockquote>
@@ -608,6 +598,18 @@ step5_rbn.py                    CSV → JSON aggregation (for heatmap.html)
 <tr>
 <td><code>download_rbn.py</code></td>
 <td>Download RBN raw data (zip)</td>
+</tr>
+<tr>
+<td><code>check_new_logs.py</code></td>
+<td>Check for newly published contest years, estimate disk usage, and import</td>
+</tr>
+<tr>
+<td><code>propmap_server.py</code></td>
+<td>Local server (static files + data-update API, stdlib only)</td>
+</tr>
+<tr>
+<td><code>update.html</code></td>
+<td>Data update page (browser front-end for check_new_logs)</td>
 </tr>
 <tr>
 <td><code>extract_json.py</code></td>
