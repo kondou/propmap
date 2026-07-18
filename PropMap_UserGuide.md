@@ -13,7 +13,7 @@ PropMapは、アマチュア無線コンテストの公開ログデータおよ�
 ### 動作環境・必要なもの
 
 - macOS Tahoe / Windows 11（動作確認済み）
-- Python 3.10 以上（起動スクリプトが自動検出する。未導入でも起動時に案内が出る。Xcode / Command Line Tools / Visual Studio などの**開発環境は不要**。詳細は「[Python 3 のインストール](#python-3-のインストール)」参照）
+- Python 3.10 以上（起動スクリプトが自動検出し、無ければ同意制で自動調達を提案するため、通常は事前インストール不要。Xcode / Command Line Tools / Visual Studio などの**開発環境は不要**。手動導入は「[（参考）Python の手動インストール](#参考python-の手動インストール)」参照）
 - モダンブラウザ（Safari、Chrome、Edge 等）
 - 参照したいコンテストの JSON データファイル（`~/heatmap/data/` に配置済みのこと）。[事前データ準備の章を参照してのデータの作成が必要](#10-事前データ準備)
 
@@ -33,47 +33,41 @@ PropMapは、アマチュア無線コンテストの公開ログデータおよ�
 
 ## 2. セットアップ
 
-### Python 3 のインストール
+### 配置
 
-**多くの場合、このセクションの作業は不要。** 起動スクリプト（`start_heatmap.command` / `.bat`）と `generate_all` は、利用可能な Python 3.10 以上を自動で探して使用する（`find_python.sh` / `find_python.bat`）。見つからない場合はその場で導入方法を案内し、同意すれば **uv** を自動インストールして Python 本体も自動調達する。**いずれの方法でもコンパイラや開発環境（Xcode / Command Line Tools / Visual Studio）は不要**（PropMap は Python 標準ライブラリのみで動作するため）
+zip を展開（またはリポジトリを clone）し、`~/heatmap/`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap\`（Windows、例: `C:\Users\ユーザー名\heatmap\`）となるよう配置する
 
-自動検出の優先順位: 環境変数 `PROPMAP_PYTHON` による明示指定 → PATH 上の `python3`（macOSでは開発者ツール未導入時のスタブを安全に除外）→ 既知のインストール場所（Homebrew / python.org）→ macOS 付属の `python3`（Command Line Tools 導入済みの場合のみ）→ uv
+### 起動方法
 
-手動で導入したい場合は以下のいずれか:
+**macOS / Windows (WSL2 あり)**
 
-#### macOS Tahoe以降
-
-- **python.org 公式インストーラ（推奨）**: [python.org](https://www.python.org/downloads/) から macOS 用インストーラ（universal2 バイナリ）を取得して実行するだけ。Xcode も Command Line Tools も不要
-- **uv**: `curl -LsSf https://astral.sh/uv/install.sh | sh` で導入。Python 本体はスタンドアロンバイナリとして自動取得される（ビルドなし）
-- Homebrew を既に利用している場合は `brew install python3` でも可。ただし OS のメジャーアップデート直後は bottle（ビルド済みバイナリ）が未提供でソースビルドにフォールバックし、Xcode を要求されることがあるため、PropMap 目的では上の2方式を推奨する
-
-確認: `python3 --version` で `Python 3.10` 以上が表示されれば成功
-
-#### Windows 11 — WSL2 なし
-
-`heatmap.html`（PropMap 本体）の利用からデータ構築まで、Python for Windows と付属の `generate_all.bat` にて対応。`generate_all.sh` は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う `generate_all.bat` を使用する
-
-1. [python.org](https://www.python.org/downloads/) から Windows 用インストーラを取得する
-2. インストール時に **「Add Python to PATH」にチェックを入れる**（デフォルトではオフだが、チェック無しでも付属の `py` ランチャー経由で自動検出される）
-3. インストール確認（コマンドプロンプト）: `py -3 --version` または `python --version` で `Python 3.10` 以上が表示されれば成功
-
-なお Microsoft Store 版 Python の「スタブ」（未導入時に `python` と打つとストアが開くエイリアス）は自動検出で安全に除外される
-
-> **注意:** Windows では `python3` ではなく `python` コマンドを使用すること
-
-ファイルの配置先は `%USERPROFILE%\heatmap\`（例: `C:\Users\ユーザー名\heatmap\`）とする
-
-#### Windows 11 — WSL2 あり
-
-WSL2 環境ではシェルスクリプトをそのまま利用でき、macOS と同等の操作感で使用可能。WSL2 のセットアップ手順は [Microsoft 公式ドキュメント](https://learn.microsoft.com/ja-jp/windows/wsl/install) を参照。Ubuntu インストール後、以下で Python 3 を導入する：
+`start_heatmap.command` をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる
 
 ```bash
-sudo apt update && sudo apt install -y python3 python3-pip
-python3 --version
+bash ~/heatmap/start_heatmap.command
 ```
-`Python 3.x.x` と表示されれば成功
 
-以降の操作は macOS と同じ。ファイルの配置先は WSL2 のホームディレクトリ（`~/heatmap/`）とする。ブラウザは Windows 側で `http://localhost:8765` にアクセスする。
+> **macOS の初回のみ:** ダウンロードした zip 由来のファイルは Gatekeeper にブロックされるため、`start_heatmap.command` を右クリック →「開く」で起動する。2回目以降はダブルクリックで起動できる
+
+（Python の場所を自分で管理している場合は `python3 ~/heatmap/propmap_server.py` の直接起動でもよい）
+
+**Windows (WSL2 なし)**
+
+`start_heatmap.bat` をダブルクリックするか、コマンドプロンプトから以下を実行する
+
+```
+%USERPROFILE%\heatmap\start_heatmap.bat
+```
+
+（Python の場所を自分で管理している場合は `python %USERPROFILE%\heatmap\propmap_server.py` の直接起動でもよい）
+
+起動後、ブラウザで `http://localhost:8765` にアクセスする
+
+起動スクリプトは利用可能な Python 3.10 以上を自動検出して使用する。見つからない場合はその場で案内が出て、同意すれば **uv** を導入し Python 本体も自動調達するため、**通常は Python の事前インストールは不要**（コンパイラや開発環境も不要）。手動で導入・管理したい場合は「[（参考）Python の手動インストール](#参考python-の手動インストール)」を参照
+
+サーバーは `127.0.0.1` にのみバインドされるため、他のPCからはアクセスできない。従来どおり `python3 -m http.server 8765` で起動しても地図表示は動作するが、その場合「データ更新」機能（下記）は使用できない
+
+> **注意:** ローカルのファイルサーバーが必要であるため、`heatmap.html` をブラウザで直接開いても動作しない
 
 ---
 
@@ -112,33 +106,43 @@ python3 --version
     └── generate_all.bat               全データ一括再生成スクリプト（Windows用）
 ```
 
-### 起動方法
+### （参考）Python の手動インストール
 
-**macOS / Windows (WSL2 あり)**
+通常は起動スクリプトの自動検出・自動調達で足りるため、この節の作業は不要。Python を手動で導入・管理したい場合のみ参照のこと
 
-`start_heatmap.command` をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる
+自動検出の優先順位: 環境変数 `PROPMAP_PYTHON` による明示指定 → PATH 上の `python3`（macOSでは開発者ツール未導入時のスタブを安全に除外）→ 既知のインストール場所（Homebrew / python.org）→ macOS 付属の `python3`（Command Line Tools 導入済みの場合のみ）→ uv
+
+#### macOS Tahoe以降
+
+- **python.org 公式インストーラ（推奨）**: [python.org](https://www.python.org/downloads/) から macOS 用インストーラ（universal2 バイナリ）を取得して実行するだけ。Xcode も Command Line Tools も不要
+- **uv**: `curl -LsSf https://astral.sh/uv/install.sh | sh` で導入。Python 本体はスタンドアロンバイナリとして自動取得される（ビルドなし）
+- Homebrew を既に利用している場合は `brew install python3` でも可。ただし OS のメジャーアップデート直後は bottle（ビルド済みバイナリ）が未提供でソースビルドにフォールバックし、Xcode を要求されることがあるため、PropMap 目的では上の2方式を推奨する
+
+確認: `python3 --version` で `Python 3.10` 以上が表示されれば成功
+
+#### Windows 11 — WSL2 なし
+
+`heatmap.html`（PropMap 本体）の利用からデータ構築まで、Python for Windows と付属の `generate_all.bat` にて対応。`generate_all.sh` は bash スクリプトのため Windows では直接実行できないため、同等の処理を行う `generate_all.bat` を使用する
+
+1. [python.org](https://www.python.org/downloads/) から Windows 用インストーラを取得する
+2. インストール時に **「Add Python to PATH」にチェックを入れる**（デフォルトではオフだが、チェック無しでも付属の `py` ランチャー経由で自動検出される）
+3. インストール確認（コマンドプロンプト）: `py -3 --version` または `python --version` で `Python 3.10` 以上が表示されれば成功
+
+なお Microsoft Store 版 Python の「スタブ」（未導入時に `python` と打つとストアが開くエイリアス）は自動検出で安全に除外される
+
+> **注意:** Windows では `python3` ではなく `python` コマンドを使用すること
+
+#### Windows 11 — WSL2 あり
+
+WSL2 環境ではシェルスクリプトをそのまま利用でき、macOS と同等の操作感で使用可能。WSL2 のセットアップ手順は [Microsoft 公式ドキュメント](https://learn.microsoft.com/ja-jp/windows/wsl/install) を参照。Ubuntu インストール後、以下で Python 3 を導入する：
 
 ```bash
-bash ~/heatmap/start_heatmap.command
+sudo apt update && sudo apt install -y python3 python3-pip
+python3 --version
 ```
+`Python 3.x.x` と表示されれば成功
 
-（Python の場所を自分で管理している場合は `python3 ~/heatmap/propmap_server.py` の直接起動でもよい）
-
-**Windows (WSL2 なし)**
-
-`start_heatmap.bat` をダブルクリックするか、コマンドプロンプトから以下を実行する
-
-```
-%USERPROFILE%\heatmap\start_heatmap.bat
-```
-
-（Python の場所を自分で管理している場合は `python %USERPROFILE%\heatmap\propmap_server.py` の直接起動でもよい）
-
-起動後、ブラウザで `http://localhost:8765` にアクセスする
-
-サーバーは `127.0.0.1` にのみバインドされるため、他のPCからはアクセスできない。従来どおり `python3 -m http.server 8765` で起動しても地図表示は動作するが、その場合「データ更新」機能（下記）は使用できない
-
-> **注意:** ローカルのファイルサーバーが必要であるため、`heatmap.html` をブラウザで直接開いても動作しない
+以降の操作は macOS と同じ。ブラウザは Windows 側で `http://localhost:8765` にアクセスする。
 
 ---
 
