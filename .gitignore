@@ -26,9 +26,6 @@ contest_logs/SN_m_tot_V2.0.txt
 # Log files
 *.log
 
-# Screenshots (embedded in HTML at build time)
-images/
-
 # Working / internal files
 heatmap_working.html
 handover_to_claudecode.md

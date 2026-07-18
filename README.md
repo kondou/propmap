@@ -10,7 +10,7 @@ looked like at the same time of day in past runnings of a contest — useful
 for operating plans and band-change timing during contests held at the same
 time of year.
 
-![PropMap screenshot](docs/screenshot.png)
+![PropMap screenshot](images/sc1.png)
 
 ## Features
 
