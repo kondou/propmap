@@ -41,7 +41,12 @@ if not defined _FOUND (
 )
 if not defined _FOUND (
     where uv >nul 2>&1
-    if !errorlevel! == 0 set "_FOUND=uv run --no-project --python 3.12 python"
+    if !errorlevel! == 0 (
+        set "_FOUND=uv run --no-project --python 3.12 python"
+    ) else if exist "%USERPROFILE%\.local\bin\uv.exe" (
+        set "PATH=%USERPROFILE%\.local\bin;!PATH!"
+        set "_FOUND=uv run --no-project --python 3.12 python"
+    )
 )
 
 if not defined _FOUND (
@@ -54,7 +59,7 @@ if not defined _FOUND (
     echo. 1>&2
     set /p _ans="uv をインストールして続行しますか? [y/N]: "
     if /i "!_ans!" == "y" (
-        powershell -NoProfile -ExecutionPolicy ByPass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+        powershell -NoProfile -ExecutionPolicy ByPass -Command "$env:UV_NO_MODIFY_PATH='1'; irm https://astral.sh/uv/install.ps1 | iex"
         set "PATH=%USERPROFILE%\.local\bin;!PATH!"
         where uv >nul 2>&1
         if !errorlevel! == 0 (

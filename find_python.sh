@@ -104,7 +104,7 @@ if [ -z "$PYTHON" ]; then
     printf "uv をインストールして続行しますか? [y/N]: " >&2
     read -r _ans
     if [ "$_ans" = "y" ] || [ "$_ans" = "Y" ]; then
-      if curl -LsSf https://astral.sh/uv/install.sh | sh; then
+      if curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh; then
         export PATH="$HOME/.local/bin:$PATH"
         if command -v uv >/dev/null 2>&1; then
           PYTHON="uv run --no-project --python 3.12 python"
