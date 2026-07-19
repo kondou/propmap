@@ -78,7 +78,7 @@ All files are placed under `~/heatmap/` (macOS/Linux/WSL2) or `%USERPROFILE%\hea
 ``` { .no-copy }
 ~/heatmap/
 ├── heatmap.html              Main application (self-contained single file)
-├── update.html               Data update page (check/import new public logs)
+├── update.html               Data update page (pre-built downloads / self-build)
 ├── propmap_server.py         Local server (static files + data update API)
 ├── find_python.sh            Python auto-detection (macOS/Linux/WSL2)
 ├── find_python.bat           Python auto-detection (Windows)
@@ -88,6 +88,7 @@ All files are placed under `~/heatmap/` (macOS/Linux/WSL2) or `%USERPROFILE%\hea
 ├── fetch_cty.py              cty.dat download script
 ├── fetch_ssn.py              Sunspot number data download script
 ├── fetch_rbn_nodes.py        RBN node list generation script
+├── make_data_release.py      Pre-built data release updater (maintainer)
 ├── cty_data/                 ★ cty.dat files (fetched by fetch_cty.py)
 ├── data/
 │   ├── {contest}_{year}.json         ☆ QSO data (10-minute resolution)
@@ -403,9 +404,29 @@ RBN (Reverse Beacon Network) is a network that automatically receives, decodes, 
 
 ## 10. Advance Data Preparation
 
-PropMap requires data to be built in advance. The data is too large to include with the tool, so users must prepare it themselves.
+PropMap requires data to be prepared in advance — it is too large to bundle with the tool. There are two ways to obtain it:
 
-### Data Processing Pipeline
+- **Download pre-built data (recommended)**: fetch ready-made JSON published by the project. Takes minutes
+- **Build it yourself (advanced)**: run the full pipeline from public logs and RBN raw data. Suited to importing a year not yet published as pre-built data, or to verification. A full build downloads several GB and takes hours
+
+### Downloading Pre-built Data (Recommended)
+
+**From the browser**
+
+With the server started via `start_heatmap` (propmap_server.py) running, open the "⟳ Data update" link on the map screen or `http://localhost:8765/update.html`, and click "Check" under "1. Download pre-built data". A list of distributed contest-years with sizes appears; select what you want and click "Download selected". Items already held are marked "held" and are not re-downloaded.
+
+**From the command line**
+
+```bash
+cd ~/heatmap/contest_logs
+python3 fetch_prebuilt.py --list      # list availability and local holdings
+python3 fetch_prebuilt.py --dry-run   # show download targets and total size only
+python3 fetch_prebuilt.py             # download missing data (with confirmation)
+```
+
+The distribution source is a rolling GitHub Release (tag `data-latest`). Downloads are verified by size and sha256, and a failed transfer never leaves a corrupt file in place (data is written to a `.part` file first).
+
+### Data Processing Pipeline (Self-build)
 
 Contest log processing order:
 
@@ -501,6 +522,25 @@ Execute:
 generate_all.bat
 ```
 
+### Importing Newly Published Years (check_new_logs.py)
+
+To check whether a new contest year has been published, review the disk-usage estimate, and import it, there are two methods: **from the browser** and **from the command line**. Target years are derived automatically from the contest schedule, so neither method requires hardcoded year updates.
+
+**From the browser (recommended)**
+
+With the server started via `start_heatmap` (propmap_server.py) running, open the "⟳ Data update" link next to the Contest selector on the map screen, or `http://localhost:8765/update.html`. Under "2. Build from public logs", click "Check" → review the estimate table → "Download and import". The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).
+
+**From the command line**
+
+```bash
+cd ~/heatmap/contest_logs
+python3 check_new_logs.py --dry-run   # availability check and estimate only
+python3 check_new_logs.py             # estimate → y/n confirmation → import
+python3 check_new_logs.py --contest cqwpx_cw   # limit to one contest
+```
+
+The estimate shows three items: public-log download size / RBN zip size / converted JSON size. Public logs and JSON are estimated from existing years; RBN zip sizes are measured via HEAD requests. If free disk space is below the estimated total, the run is aborted before starting. RBN raw data is kept as zips and only extracted temporarily during JSON generation (as before).
+
 ### Script Reference
 
 | Script | Role |
@@ -519,8 +559,10 @@ generate_all.bat
 | `lookup_cty.py` | Module to look up grid locator from callsign via cty.dat |
 | `download_rbn.py` | Download RBN raw data (zip) |
 | `check_new_logs.py` | Check for newly published contest years, estimate disk usage, and import |
+| `fetch_prebuilt.py` | Download pre-built heatmap JSON from the distribution release |
+| `make_data_release.py` | Update the rolling pre-built data release (maintainer) |
 | `propmap_server.py` | Local server (static files + data-update API, stdlib only) |
-| `update.html` | Data update page (browser front-end for check_new_logs) |
+| `update.html` | Data update page (pre-built downloads and self-build from the browser) |
 | `extract_json.py` | Extract records from large JSON by condition (debug) |
 | `fetch_cty.py` | Download cty.dat files (places in `cty_data/`) |
 | `fetch_ssn.py` | Download sunspot number data (SN_m_tot_V2.0.txt) |

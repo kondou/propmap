@@ -10,13 +10,17 @@ API:
   POST /api/new-logs/check    新規年の確認+見積もり開始（バックグラウンド）
                               body(JSON, 省略可): {"contest": str, "all_missing": bool}
   POST /api/new-logs/import   直近のcheck結果を対象に取り込み開始
-  GET  /api/new-logs/status   ジョブ状態JSON
+  POST /api/prebuilt/check    構築済みデータ配布状況の確認（バックグラウンド）
+  POST /api/prebuilt/import   直近のprebuilt check結果からダウンロード開始
+                              body(JSON, 省略可): {"keys": ["iaru_2025", ...]}
+  GET  /api/new-logs/status   ジョブ状態JSON（kind フィールドでジョブ種を区別）
   GET  /api/datasets          data/*.json の実在一覧 {contest: [years...]}
 
 ジョブ状態機械:
   idle → checking → ready → running → done
                   ↘ error        ↘ error
-  同時に走るジョブは常に1件。実行中の check/import 要求は 409 を返す。
+  同時に走るジョブは常に1件（new-logs / prebuilt 共用）。
+  実行中の check/import 要求は 409 を返す。
 
 起動: python3 propmap_server.py [--port 8765]
 """
@@ -37,6 +41,7 @@ SCRIPT_DIR = HEATMAP_DIR / "contest_logs"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import check_new_logs as cnl                      # noqa: E402
+import fetch_prebuilt as fpb                      # noqa: E402
 from contest_utils import CONTEST_CFG, msg        # noqa: E402
 
 LOG_TAIL_LINES = 80
@@ -47,12 +52,14 @@ DATASET_RE = re.compile(r"^([a-z_]+)_(\d{4})\.json$")
 _lock = threading.Lock()
 _job = {
     "state": "idle",          # idle/checking/ready/running/done/error
+    "kind": None,             # "logs" | "prebuilt"
     "started": None,          # epoch秒
     "finished": None,
     "params": {},             # checkに渡したパラメータ
     "targets": [],            # gather_targets の結果
     "unpublished": [],
     "estimate": None,         # build_estimate の結果
+    "prebuilt_rows": [],      # gather_prebuilt の結果
     "steps_total": 0,
     "step_index": 0,          # 1-origin（実行中のステップ番号）
     "step_label": "",
@@ -184,6 +191,85 @@ def _import_worker(targets):
             _job["finished"] = time.time()
 
 
+# ---- prebuilt（構築済みデータ）スレッド ---------------------------------------
+
+def _prebuilt_check_worker():
+    try:
+        _log_line(msg("配布 manifest を確認中...",
+                      "Checking distribution manifest..."))
+        manifest = fpb.fetch_manifest()
+        rows = fpb.gather_prebuilt(manifest)
+        for r in rows:
+            state = (msg("取得済み", "held") if r["held"]
+                     else msg(f"未取得 ({fpb.fmt_bytes(r['need_bytes'])})",
+                              f"needed ({fpb.fmt_bytes(r['need_bytes'])})"))
+            _log_line(f"  {r['label']} {r['year']}: {state}")
+        est = fpb.build_estimate_prebuilt(rows)
+        with _lock:
+            _job["prebuilt_rows"] = rows
+            _job["estimate"] = {"total": est["total"], "free": est["free"]}
+            _job["state"] = "ready"
+            _job["finished"] = time.time()
+    except Exception as e:
+        with _lock:
+            _job["state"] = "error"
+            _job["error"] = f"prebuilt check failed: {e}"
+            _job["finished"] = time.time()
+
+
+def _prebuilt_import_worker(rows):
+    try:
+        files = [f for r in rows for f in r["files"] if f["need"]]
+        total = sum(f["size"] for f in files)
+        free = fpb.build_estimate_prebuilt(rows)["free"]
+        if free < total:
+            with _lock:
+                _job["state"] = "error"
+                _job["error"] = msg(
+                    "空き容量がダウンロード合計を下回っています",
+                    "Free disk space is below the download total")
+                _job["finished"] = time.time()
+            return
+
+        with _lock:
+            _job["steps_total"] = len(files)
+
+        results = {}
+        for i, f in enumerate(files, 1):
+            key_row = next(r for r in rows
+                           if any(x["name"] == f["name"] for x in r["files"]))
+            key = (key_row["contest"], key_row["year"])
+            with _lock:
+                _job["step_index"] = i
+                _job["step_label"] = f["name"]
+            _log_line(f"==== [{i}/{len(files)}] {f['name']} "
+                      f"({fpb.fmt_bytes(f['size'])}) ====")
+            try:
+                fpb.download_file(f)
+                results.setdefault(key, True)
+            except Exception as e:
+                _log_line(msg(f"!!! エラー: {f['name']}: {e}",
+                              f"!!! Error: {f['name']}: {e}"))
+                results[key] = False
+
+        with _lock:
+            _job["results"] = [
+                {"contest": c, "year": y, "ok": ok}
+                for (c, y), ok in results.items()]
+            _job["state"] = ("done" if results and all(results.values())
+                             else "error" if results else "done")
+            if _job["state"] == "error":
+                _job["error"] = msg("一部のダウンロードが失敗しました（ログ参照）",
+                                    "Some downloads failed (see log)")
+            _job["finished"] = time.time()
+        _log_line(msg("==== 完了 ====", "==== Done ===="))
+    except Exception as e:
+        with _lock:
+            _job["state"] = "error"
+            _job["error"] = f"prebuilt import failed: {e}"
+            _job["finished"] = time.time()
+
+
 # ---- HTTP ハンドラ -----------------------------------------------------------
 
 class PropMapHandler(SimpleHTTPRequestHandler):
@@ -261,9 +347,11 @@ class PropMapHandler(SimpleHTTPRequestHandler):
                 if _job["state"] in ("checking", "running"):
                     return self._send_json(
                         {"error": "busy", "state": _job["state"]}, 409)
-                _job.update(state="checking", started=time.time(),
+                _job.update(state="checking", kind="logs",
+                            started=time.time(),
                             finished=None, targets=[], unpublished=[],
-                            estimate=None, steps_total=0, step_index=0,
+                            estimate=None, prebuilt_rows=[],
+                            steps_total=0, step_index=0,
                             step_label="", results=[], error=None,
                             params={"contest": contest,
                                     "all_missing": all_missing})
@@ -278,7 +366,8 @@ class PropMapHandler(SimpleHTTPRequestHandler):
                 if _job["state"] in ("checking", "running"):
                     return self._send_json(
                         {"error": "busy", "state": _job["state"]}, 409)
-                if _job["state"] != "ready" or not _job["targets"]:
+                if (_job["state"] != "ready" or _job["kind"] != "logs"
+                        or not _job["targets"]):
                     return self._send_json(
                         {"error": "no check result; run check first"}, 400)
                 targets = list(_job["targets"])
@@ -287,6 +376,48 @@ class PropMapHandler(SimpleHTTPRequestHandler):
                             step_label="", results=[], error=None)
             threading.Thread(target=_import_worker,
                              args=(targets,), daemon=True).start()
+            return self._send_json({"ok": True, "state": "running"})
+
+        if path == "/api/prebuilt/check":
+            with _lock:
+                if _job["state"] in ("checking", "running"):
+                    return self._send_json(
+                        {"error": "busy", "state": _job["state"]}, 409)
+                _job.update(state="checking", kind="prebuilt",
+                            started=time.time(),
+                            finished=None, targets=[], unpublished=[],
+                            estimate=None, prebuilt_rows=[],
+                            steps_total=0, step_index=0,
+                            step_label="", results=[], error=None, params={})
+                _job["log"].clear()
+            threading.Thread(target=_prebuilt_check_worker,
+                             daemon=True).start()
+            return self._send_json({"ok": True, "state": "checking"})
+
+        if path == "/api/prebuilt/import":
+            body = self._read_json_body()
+            keys = body.get("keys")   # ["iaru_2025", ...] 省略時は全未取得分
+            with _lock:
+                if _job["state"] in ("checking", "running"):
+                    return self._send_json(
+                        {"error": "busy", "state": _job["state"]}, 409)
+                if (_job["state"] != "ready" or _job["kind"] != "prebuilt"
+                        or not _job["prebuilt_rows"]):
+                    return self._send_json(
+                        {"error": "no check result; run check first"}, 400)
+                rows = [r for r in _job["prebuilt_rows"] if not r["held"]]
+                if keys is not None:
+                    keyset = set(keys)
+                    rows = [r for r in rows
+                            if f"{r['contest']}_{r['year']}" in keyset]
+                if not rows:
+                    return self._send_json(
+                        {"error": "nothing selected to download"}, 400)
+                _job.update(state="running", started=time.time(),
+                            finished=None, steps_total=0, step_index=0,
+                            step_label="", results=[], error=None)
+            threading.Thread(target=_prebuilt_import_worker,
+                             args=(rows,), daemon=True).start()
             return self._send_json({"ok": True, "state": "running"})
 
         return self._send_json({"error": "not found"}, 404)

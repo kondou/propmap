@@ -153,7 +153,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <p>すべてのファイルは <code>~/heatmap/</code>（macOS/Linux/WSL2）または <code>%USERPROFILE%\heatmap\</code>（Windows）以下に配置する。リポジトリに含まれるファイルのほか、パイプライン初回実行時に fetch スクリプトが自動取得するファイル（★）とデータ構築スクリプトが生成するファイル（☆）がある。</p>
 <pre><code class="language-no-copy">~/heatmap/
 ├── heatmap.html              メインアプリ（単一ファイル完結）
-├── update.html               データ更新ページ（新規公開ログの確認・取り込み）
+├── update.html               データ更新ページ（構築済みデータ取得・自前構築）
 ├── propmap_server.py         ローカルサーバー（静的配信 + データ更新API）
 ├── find_python.sh            Python 自動検出（macOS/Linux/WSL2用）
 ├── find_python.bat           Python 自動検出（Windows用）
@@ -163,6 +163,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 ├── fetch_cty.py              cty.dat 一式ダウンロードスクリプト
 ├── fetch_ssn.py              太陽黒点数データダウンロードスクリプト
 ├── fetch_rbn_nodes.py        RBNノードリスト生成スクリプト
+├── make_data_release.py      構築済みデータのリリース更新（メンテナ用）
 ├── cty_data/                 ★ cty.dat 一式（fetch_cty.py が取得）
 ├── data/
 │   ├── {contest}_{year}.json         ☆ QSOデータ（10分解像度）
@@ -532,8 +533,22 @@ Radius: 20,000km
 <p><code>SN_m_tot_V2.0.txt</code>（SILSOが提供する月別太陽黒点数データ）を使用してコンテスト開催月のSSNを自動解決し、データ処理時に活用する想定（現状 SSN は RBN ペア CSV のメタデータフィールドとして記録されているが、ヒートマップ表示への直接の影響はなく、この値の利用は未実装）。ファイルが存在しない場合は <code>generate_all.sh</code>（または <code>.bat</code>）実行時に <code>fetch_ssn.py</code> が自動的にダウンロードする</p>
 <hr />
 <h2 id="10">10. 事前データ準備</h2>
-<p>PropMap を使用するには各種データを事前に構築する必要がある。ツールに含めるにはデータが大きすぎるため、利用者が自分で準備することとしている</p>
-<h3 id="_21">データ処理パイプライン</h3>
+<p>PropMap を使用するには各種データを事前に用意する必要がある。ツールに含めるにはデータが大きすぎるためで、入手方法は2つある：</p>
+<ul>
+<li><strong>構築済みデータの取得（推奨）</strong>: プロジェクトが公開している構築済み JSON をダウンロードする。数分で完了する</li>
+<li><strong>自前構築（上級者向け）</strong>: 公開ログと RBN raw データから全パイプラインを実行する。構築済みデータがまだ公開されていない年をいち早く取り込みたい場合や検証目的に向く。フル構築は数 GB のダウンロードと数時間の処理を要する</li>
+</ul>
+<h3 id="_21">構築済みデータの取得（推奨）</h3>
+<p><strong>ブラウザから</strong></p>
+<p><code>start_heatmap</code> で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの「⟳ データ更新」リンクまたは <code>http://localhost:8765/update.html</code> を開き、「1. 構築済みデータの取得」の「確認する」をクリックする。配布されているコンテスト×年とサイズの一覧が表示されるので、取得したいものを選択して「選択分をダウンロード」を実行する。取得済みのものは「取得済み」と表示され再取得されない</p>
+<p><strong>コマンドラインから</strong></p>
+<pre><code class="language-bash">cd ~/heatmap/contest_logs
+python3 fetch_prebuilt.py --list      # 配布状況とローカル保持状況の一覧
+python3 fetch_prebuilt.py --dry-run   # ダウンロード対象と合計サイズのみ表示
+python3 fetch_prebuilt.py             # 未保持分をダウンロード（確認あり）
+</code></pre>
+<p>配布元は GitHub Releases のローリングリリース（タグ <code>data-latest</code>）。ダウンロードはサイズ・sha256 検証つきで、途中失敗時に壊れたファイルが残らない（<code>.part</code> に書いてから配置）</p>
+<h3 id="_22">データ処理パイプライン（自前構築）</h3>
 <p>コンテストログデータの処理順序：</p>
 <pre><code class="language-no-copy">Cabrilloログ（raw/*.txt）
     ↓
@@ -565,7 +580,7 @@ step5_rbn.py                    CSV → JSON集約（heatmap.html用）
     → 旧ノードは cty.dat でグリッドを補完
     → rbn/rbn_nodes.csv に保存
 </code></pre>
-<h3 id="_22">全データの一括再生成</h3>
+<h3 id="_23">全データの一括再生成</h3>
 <h4 id="macos-wsl2generate_allsh">macOS / WSL2（generate_all.sh）</h4>
 <p>まず contest_logs ディレクトリに移動する：</p>
 <pre><code class="language-bash">cd ~/heatmap/contest_logs
@@ -595,7 +610,7 @@ step5_rbn.py                    CSV → JSON集約（heatmap.html用）
 <h3 id="check_new_logspy">新規開催年の取り込み（check_new_logs.py）</h3>
 <p>コンテストの新しい開催年が公開されたかを確認し、必要ディスク量の見積もりを確認したうえで取り込むには、<strong>ブラウザからの操作</strong>と<strong>コマンドライン</strong>の2つの方法がある。対象年は開催日程から自動導出されるため、いずれの方法でも年のハードコード更新は不要</p>
 <p><strong>ブラウザから（推奨）</strong></p>
-<p><code>start_heatmap</code> で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または <code>http://localhost:8765/update.html</code> を開く。「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）</p>
+<p><code>start_heatmap</code> で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または <code>http://localhost:8765/update.html</code> を開く。「2. 公開ログからの自前構築」の「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）</p>
 <p><strong>コマンドラインから</strong></p>
 <pre><code class="language-bash">cd ~/heatmap/contest_logs
 python3 check_new_logs.py --dry-run   # 有無確認と見積もり表示のみ
@@ -603,7 +618,7 @@ python3 check_new_logs.py             # 見積もり表示 → y/n 確認 → �
 python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
 </code></pre>
 <p>表示される見積もりは「公開ログDLサイズ / RBN zipサイズ / JSON変換後サイズ」の3項目。公開ログとJSONは既存年の実績からの推定値、RBN zipはHEADリクエストによる実測値。空き容量が見積もり合計を下回る場合は実行前に中断される。RBN rawはzipのまま保持され、JSON生成時にのみ一時展開される（従来どおり）</p>
-<h3 id="_23">各スクリプトの役割</h3>
+<h3 id="_24">各スクリプトの役割</h3>
 <table>
 <thead>
 <tr>
@@ -669,12 +684,20 @@ python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
 <td>新規開催年の公開ログ/RBNの有無確認・サイズ見積もり・取り込み</td>
 </tr>
 <tr>
+<td><code>fetch_prebuilt.py</code></td>
+<td>構築済みヒートマップJSONのダウンロード（配布リリース参照）</td>
+</tr>
+<tr>
+<td><code>make_data_release.py</code></td>
+<td>構築済みデータのローリングリリース更新（メンテナ用）</td>
+</tr>
+<tr>
 <td><code>propmap_server.py</code></td>
 <td>ローカルサーバー（静的配信 + データ更新API、標準ライブラリのみ）</td>
 </tr>
 <tr>
 <td><code>update.html</code></td>
-<td>データ更新ページ（check_new_logs をブラウザから操作）</td>
+<td>データ更新ページ（構築済みデータ取得と自前構築をブラウザから操作）</td>
 </tr>
 <tr>
 <td><code>extract_json.py</code></td>
@@ -764,16 +787,16 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
   --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
   --output ../data/cqwpx_cw_2024_approx.json
 </code></pre>
-<h3 id="_24">アニメーション（点滅）がカクつく・止まる</h3>
+<h3 id="_25">アニメーション（点滅）がカクつく・止まる</h3>
 <ul>
 <li>PropMap のタブをバックグラウンドにするとブラウザのタイマー制限により点滅が一時停止する。これはブラウザの仕様であり不具合ではない</li>
 <li>他タブ・ウィンドウで重い処理（動画・WebGL 等）を開いている場合、CPU リソース競合によりカクつくことがある。PropMap タブをアクティブにし、他の重いページを閉じると改善する</li>
 </ul>
-<h3 id="_25">初回読み込みが遅い</h3>
+<h3 id="_26">初回読み込みが遅い</h3>
 <p>JSON ファイルは 1 ファイルあたり数十〜200MB 超になる場合があり、初回読み込みに数秒かかることがある。これはデータ量に起因するものであり、2 回目以降はブラウザキャッシュが効く</p>
-<h3 id="_26">ブラウザ互換性</h3>
+<h3 id="_27">ブラウザ互換性</h3>
 <p>Chrome / Safari / Edge で動作確認済み。Firefox でも動作するが、大量データ処理時のパフォーマンスに差が出ることがある</p>
-<h3 id="_27">スマートフォン・タブレットでの利用</h3>
+<h3 id="_28">スマートフォン・タブレットでの利用</h3>
 <p>動作確認・使用を想定していない。PC ブラウザでの利用を前提とする</p>
 <script>
 document.querySelectorAll('pre').forEach(pre => {

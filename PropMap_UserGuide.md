@@ -78,7 +78,7 @@ bash ~/heatmap/start_heatmap.command
 ``` { .no-copy }
 ~/heatmap/
 ├── heatmap.html              メインアプリ（単一ファイル完結）
-├── update.html               データ更新ページ（新規公開ログの確認・取り込み）
+├── update.html               データ更新ページ（構築済みデータ取得・自前構築）
 ├── propmap_server.py         ローカルサーバー（静的配信 + データ更新API）
 ├── find_python.sh            Python 自動検出（macOS/Linux/WSL2用）
 ├── find_python.bat           Python 自動検出（Windows用）
@@ -88,6 +88,7 @@ bash ~/heatmap/start_heatmap.command
 ├── fetch_cty.py              cty.dat 一式ダウンロードスクリプト
 ├── fetch_ssn.py              太陽黒点数データダウンロードスクリプト
 ├── fetch_rbn_nodes.py        RBNノードリスト生成スクリプト
+├── make_data_release.py      構築済みデータのリリース更新（メンテナ用）
 ├── cty_data/                 ★ cty.dat 一式（fetch_cty.py が取得）
 ├── data/
 │   ├── {contest}_{year}.json         ☆ QSOデータ（10分解像度）
@@ -427,9 +428,29 @@ RBN（Reverse Beacon Network）は、CWやデジタルモードの信号を自�
 
 ## 10. 事前データ準備
 
-PropMap を使用するには各種データを事前に構築する必要がある。ツールに含めるにはデータが大きすぎるため、利用者が自分で準備することとしている
+PropMap を使用するには各種データを事前に用意する必要がある。ツールに含めるにはデータが大きすぎるためで、入手方法は2つある：
 
-### データ処理パイプライン
+- **構築済みデータの取得（推奨）**: プロジェクトが公開している構築済み JSON をダウンロードする。数分で完了する
+- **自前構築（上級者向け）**: 公開ログと RBN raw データから全パイプラインを実行する。構築済みデータがまだ公開されていない年をいち早く取り込みたい場合や検証目的に向く。フル構築は数 GB のダウンロードと数時間の処理を要する
+
+### 構築済みデータの取得（推奨）
+
+**ブラウザから**
+
+`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの「⟳ データ更新」リンクまたは `http://localhost:8765/update.html` を開き、「1. 構築済みデータの取得」の「確認する」をクリックする。配布されているコンテスト×年とサイズの一覧が表示されるので、取得したいものを選択して「選択分をダウンロード」を実行する。取得済みのものは「取得済み」と表示され再取得されない
+
+**コマンドラインから**
+
+```bash
+cd ~/heatmap/contest_logs
+python3 fetch_prebuilt.py --list      # 配布状況とローカル保持状況の一覧
+python3 fetch_prebuilt.py --dry-run   # ダウンロード対象と合計サイズのみ表示
+python3 fetch_prebuilt.py             # 未保持分をダウンロード（確認あり）
+```
+
+配布元は GitHub Releases のローリングリリース（タグ `data-latest`）。ダウンロードはサイズ・sha256 検証つきで、途中失敗時に壊れたファイルが残らない（`.part` に書いてから配置）
+
+### データ処理パイプライン（自前構築）
 
 コンテストログデータの処理順序：
 
@@ -531,7 +552,7 @@ generate_all.bat
 
 **ブラウザから（推奨）**
 
-`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または `http://localhost:8765/update.html` を開く。「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）
+`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または `http://localhost:8765/update.html` を開く。「2. 公開ログからの自前構築」の「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）
 
 **コマンドラインから**
 
@@ -562,8 +583,10 @@ python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
 | `lookup_cty.py` | cty.dat からコールサインのグリッドを引くモジュール |
 | `download_rbn.py` | RBN rawデータ（zip）のダウンロード |
 | `check_new_logs.py` | 新規開催年の公開ログ/RBNの有無確認・サイズ見積もり・取り込み |
+| `fetch_prebuilt.py` | 構築済みヒートマップJSONのダウンロード（配布リリース参照） |
+| `make_data_release.py` | 構築済みデータのローリングリリース更新（メンテナ用） |
 | `propmap_server.py` | ローカルサーバー（静的配信 + データ更新API、標準ライブラリのみ） |
-| `update.html` | データ更新ページ（check_new_logs をブラウザから操作） |
+| `update.html` | データ更新ページ（構築済みデータ取得と自前構築をブラウザから操作） |
 | `extract_json.py` | 大容量JSONから条件を絞って切り出し（デバッグ用） |
 | `fetch_cty.py` | cty.dat 一式をダウンロード（`cty_data/` に配置） |
 | `fetch_ssn.py` | 太陽黒点数データ（SN_m_tot_V2.0.txt）をダウンロード |

@@ -47,17 +47,17 @@ The server binds to 127.0.0.1 only and is not reachable from other machines.
 
 ## Preparing data
 
-Contest data is **not** bundled — it is too large. Build it once after
-installing:
+Contest data is **not** bundled — it is too large. Get it once after
+installing, from the "Data update" page linked from the map screen:
 
-- **From the browser (recommended):** open the "Data update" page linked
-  from the map screen, check for available logs, review the disk estimate,
-  and run the import
-- **From the command line:** `cd ~/heatmap/contest_logs && bash generate_all.sh`
-  (Windows: `generate_all.bat`)
+- **Download pre-built data (recommended):** fetch ready-made heatmap JSON
+  published on the project's rolling release. Takes minutes
+- **Build from public logs (advanced):** run the full pipeline yourself —
+  useful for years not yet published as pre-built data. A full build
+  downloads many gigabytes and can take hours
 
-A full build of all contests and years downloads many gigabytes and can take
-hours; start with one contest/year if you just want to try it out.
+Both are also available from the command line (`fetch_prebuilt.py` /
+`generate_all.sh`); see the user guide.
 
 ## Documentation
 

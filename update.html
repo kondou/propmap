@@ -51,7 +51,20 @@
 </h1>
 
 <div class="panel">
-  <h2 data-en="1. Check for new public logs">1. 新規公開ログの確認</h2>
+  <h2 data-en="1. Download pre-built data (recommended)">1. 構築済みデータの取得（推奨）</h2>
+  <div class="row">
+    <span class="note" data-en="Fetch ready-made heatmap data published by the project. Takes minutes instead of the hours a local build needs.">プロジェクトが公開している構築済みヒートマップデータを取得する。自前構築（数時間）に対し数分で完了する。</span>
+    <button id="btn-pb-check" data-en="Check">確認する</button>
+  </div>
+  <div id="pbresult"></div>
+  <div id="pb-diskline"></div>
+  <div id="pb-actions" style="display:none;margin-top:10px;">
+    <button id="btn-pb-import" class="primary" data-en="Download selected">選択分をダウンロード</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 data-en="2. Build from public logs (advanced)">2. 公開ログからの自前構築（上級者向け）</h2>
   <div class="row">
     <label><span data-en="Target: ">対象: </span>
       <select id="sel-contest">
@@ -71,7 +84,7 @@
 </div>
 
 <div class="panel" id="panel-estimate" style="display:none;">
-  <h2 data-en="2. Disk usage estimate">2. ディスク使用量見積もり</h2>
+  <h2 data-en="3. Disk usage estimate">3. ディスク使用量見積もり</h2>
   <div id="estimate"></div>
   <div id="diskline"></div>
   <div class="note" data-en="* Public log and JSON sizes are estimates based on existing years. RBN zip sizes are measured via HEAD (except rows marked as estimated). Generating RBN JSON temporarily extracts the zips and requires additional free space.">※ 公開ログ・JSONサイズは既存年の実績からの推定値。
@@ -83,7 +96,7 @@
 </div>
 
 <div class="panel" id="panel-progress" style="display:none;">
-  <h2 data-en="3. Progress">3. 実行状況</h2>
+  <h2 data-en="4. Progress">4. 実行状況</h2>
   <div id="statusline"></div>
   <progress id="prog" max="1" value="0"></progress>
   <pre id="logtail"></pre>
@@ -181,10 +194,30 @@ function renderCheckResult(st) {
   box.innerHTML = h;
 }
 
-function render(st) {
-  const busy = st.state === 'checking' || st.state === 'running';
-  $('btn-check').disabled = busy;
+function renderProgress(st) {
+  $('panel-progress').style.display = '';
+  const sl = $('statusline');
+  if (st.state === 'running') {
+    sl.innerHTML = `<span class="spin"></span>${T('実行中','Running')} ` +
+      `[${st.step_index}/${st.steps_total}] ${st.step_label} ` +
+      `<span class="note">${T('経過','elapsed')} ${fmtSec(st.elapsed_sec)}</span>`;
+  } else if (st.state === 'done') {
+    sl.innerHTML = `<span class="ok">${T('完了しました','Completed')}</span> ` +
+      `<span class="note">${T(
+        `所要 ${fmtSec(st.elapsed_sec)}。伝播マップに戻ると新しい年が選択できます。`,
+        `Took ${fmtSec(st.elapsed_sec)}. Return to the propagation map to select the new year(s).`)}</span>`;
+  } else {
+    sl.innerHTML = `<span class="err">${T('エラー','Error')}: ${st.error || ''}</span>` +
+      ` <span class="note">${T('（ログ参照）','(see log)')}</span>`;
+  }
+  $('prog').value = st.steps_total ? st.step_index / st.steps_total : 0;
+  const pre = $('logtail');
+  const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+  pre.textContent = (st.log_tail || []).join('\n');
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
+}
 
+function renderLogsJob(st) {
   if (st.state === 'checking') {
     $('checkresult').innerHTML =
       `<div><span class="spin"></span>${T('公開ログサイトを確認中...',
@@ -198,33 +231,109 @@ function render(st) {
   if (st.state === 'running' || st.state === 'done' ||
       (st.state === 'error' && st.steps_total > 0)) {
     renderCheckResult(st);
-    if (st.estimate) renderEstimate(st);
+    if (st.estimate && st.estimate.rows) renderEstimate(st);
     $('btn-import').disabled = true;
-    $('panel-progress').style.display = '';
-    const sl = $('statusline');
-    if (st.state === 'running') {
-      sl.innerHTML = `<span class="spin"></span>${T('実行中','Running')} ` +
-        `[${st.step_index}/${st.steps_total}] ${st.step_label} ` +
-        `<span class="note">${T('経過','elapsed')} ${fmtSec(st.elapsed_sec)}</span>`;
-    } else if (st.state === 'done') {
-      sl.innerHTML = `<span class="ok">${T('完了しました','Completed')}</span> ` +
-        `<span class="note">${T(
-          `所要 ${fmtSec(st.elapsed_sec)}。伝播マップに戻ると新しい年が選択できます。`,
-          `Took ${fmtSec(st.elapsed_sec)}. Return to the propagation map to select the new year(s).`)}</span>`;
-    } else {
-      sl.innerHTML = `<span class="err">${T('エラー','Error')}: ${st.error || ''}</span>` +
-        ` <span class="note">${T('（ログ参照）','(see log)')}</span>`;
-    }
-    $('prog').value = st.steps_total ? st.step_index / st.steps_total : 0;
-    const pre = $('logtail');
-    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
-    pre.textContent = (st.log_tail || []).join('\n');
-    if (atBottom) pre.scrollTop = pre.scrollHeight;
+    renderProgress(st);
   }
   if (st.state === 'error' && st.steps_total === 0) {
     $('checkresult').innerHTML =
       `<div class="err">${T('エラー','Error')}: ${st.error || ''}</div>`;
   }
+}
+
+// ---- 構築済みデータの取得 ----
+let pbSelected = new Set();
+let pbRenderedJob = null;
+
+function updatePbTotals(st) {
+  const dl = $('pb-diskline');
+  if (!st.prebuilt_rows.some(r => !r.held)) {
+    dl.innerHTML = `<span class="ok">${T('すべて取得済み。','Everything is up to date.')}</span>`;
+    $('pb-actions').style.display = 'none';
+    return;
+  }
+  const total = st.prebuilt_rows
+    .filter(r => pbSelected.has(r.contest + '_' + r.year))
+    .reduce((s, r) => s + r.need_bytes, 0);
+  const free = st.estimate ? st.estimate.free : null;
+  if (free != null && free < total) {
+    dl.innerHTML = `<span class="err">${T(
+      `空き容量 ${fmtB(free)} が選択合計 ${fmtB(total)} を下回っています。`,
+      `Free space ${fmtB(free)} is below the selected total ${fmtB(total)}.`)}</span>`;
+    $('btn-pb-import').disabled = true;
+  } else {
+    dl.textContent = `${T('選択合計','Selected total')}: ${fmtB(total)}   ` +
+                     `${T('空き容量','Free space')}: ${fmtB(free)}`;
+    $('btn-pb-import').disabled = total === 0;
+  }
+  $('pb-actions').style.display = '';
+}
+
+function renderPrebuiltTable(st) {
+  const rows = st.prebuilt_rows;
+  if (!rows.length) {
+    $('pbresult').innerHTML = `<div class="note">${T('配布データがありません。',
+      'No distributed data available.')}</div>`;
+    $('pb-actions').style.display = 'none';
+    return;
+  }
+  let h = `<table><tr><th></th><th>${T('コンテスト','Contest')}</th>` +
+          `<th>${T('年','Year')}</th><th class="num">${T('サイズ','Size')}</th></tr>`;
+  for (const r of rows) {
+    const key = r.contest + '_' + r.year;
+    const cb = r.held ? ''
+      : `<input type="checkbox" data-key="${key}"${pbSelected.has(key) ? ' checked' : ''}>`;
+    const size = r.held ? `<span class="ok">${T('取得済み','held')}</span>`
+                        : fmtB(r.need_bytes);
+    h += `<tr><td>${cb}</td><td>${r.label}</td><td>${r.year}</td>` +
+         `<td class="num">${size}</td></tr>`;
+  }
+  h += '</table>';
+  $('pbresult').innerHTML = h;
+  $('pbresult').querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) pbSelected.add(cb.dataset.key);
+      else pbSelected.delete(cb.dataset.key);
+      updatePbTotals(st);
+    });
+  });
+  updatePbTotals(st);
+}
+
+function renderPrebuiltJob(st) {
+  if (st.state === 'checking') {
+    $('pbresult').innerHTML =
+      `<div><span class="spin"></span>${T('配布状況を確認中...',
+        'Checking availability...')}</div>`;
+    $('pb-actions').style.display = 'none';
+    $('pb-diskline').textContent = '';
+  }
+  if (st.state === 'ready') {
+    if (pbRenderedJob !== st.started) {
+      pbRenderedJob = st.started;
+      pbSelected = new Set(st.prebuilt_rows.filter(r => !r.held)
+                             .map(r => r.contest + '_' + r.year));
+    }
+    renderPrebuiltTable(st);
+  }
+  if (st.state === 'running' || st.state === 'done' ||
+      (st.state === 'error' && st.steps_total > 0)) {
+    $('btn-pb-import').disabled = true;
+    renderProgress(st);
+  }
+  if (st.state === 'error' && st.steps_total === 0) {
+    $('pbresult').innerHTML =
+      `<div class="err">${T('エラー','Error')}: ${st.error || ''}</div>`;
+  }
+}
+
+function render(st) {
+  const busy = st.state === 'checking' || st.state === 'running';
+  $('btn-check').disabled = busy;
+  $('btn-pb-check').disabled = busy;
+
+  if (st.kind === 'prebuilt') renderPrebuiltJob(st);
+  else if (st.kind === 'logs') renderLogsJob(st);
 
   if (busy) startPolling(); else stopPolling();
 }
@@ -247,6 +356,27 @@ async function refresh() {
       `</span></div>`;
   }
 }
+
+$('btn-pb-check').onclick = async () => {
+  try {
+    await api('/api/prebuilt/check', { method: 'POST' });
+    refresh();
+  } catch (e) { alert(T('確認を開始できません: ','Could not start the check: ') + e.message); }
+};
+
+$('btn-pb-import').onclick = async () => {
+  if (!confirm(T('選択したデータをダウンロードします。よろしいですか?',
+                 'Download the selected data. Proceed?')))
+    return;
+  try {
+    await api('/api/prebuilt/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [...pbSelected] })
+    });
+    refresh();
+  } catch (e) { alert(T('実行を開始できません: ','Could not start the download: ') + e.message); }
+};
 
 $('btn-check').onclick = async () => {
   const body = { all_missing: $('chk-allmissing').checked };
