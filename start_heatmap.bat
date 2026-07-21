@@ -1,22 +1,24 @@
 @echo off
 cd /d "%~dp0"
 
-REM 実行に使う Python を解決（開発環境が無くても動くようにする。詳細は find_python.bat）
+REM Resolve the Python to use (works with no dev environment installed;
+REM see find_python.bat for details).
 call "%~dp0find_python.bat"
 if not defined PYTHON (
-    echo Python が見つからないため起動できません。案内に従って導入後、再度実行してください。
+    echo Python was not found, so PropMap cannot start. Follow the guidance above to install it, then run this again.
     pause >nul
     exit /b 1
 )
 
-REM 既存のサーバーを停止
+REM Stop any existing server
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8765 " ^| findstr "LISTENING" 2^>nul') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 timeout /t 1 /nobreak >nul
 
-REM サーバーをバックグラウンドで起動
-REM 静的配信 + データ更新API（propmap_server.py が無ければ従来の http.server）
+REM Start the server in the background.
+REM Static files + data-update API (falls back to http.server if
+REM propmap_server.py is missing).
 if exist propmap_server.py (
     start /b %PYTHON% propmap_server.py --port 8765
 ) else (
@@ -24,14 +26,14 @@ if exist propmap_server.py (
 )
 timeout /t 1 /nobreak >nul
 
-REM ブラウザを開く
+REM Open the browser
 start http://localhost:8765/heatmap.html
 
 echo.
-echo  PropMap サーバーが起動しました  (python: %PYTHON%)
+echo  PropMap server started  (python: %PYTHON%)
 echo  http://localhost:8765/heatmap.html
-echo  データ更新: http://localhost:8765/update.html
+echo  Data update: http://localhost:8765/update.html
 echo.
-echo  このウィンドウを閉じるとサーバーが停止します。
+echo  Closing this window stops the server.
 echo.
 pause >nul
