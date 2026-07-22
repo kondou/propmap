@@ -142,11 +142,13 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <p>zip を展開（またはリポジトリを clone）し、<code>~/heatmap/</code>（macOS/Linux/WSL2）または <code>%USERPROFILE%\heatmap\</code>（Windows、例: <code>C:\Users\ユーザー名\heatmap\</code>）となるよう配置する</p>
 <h3 id="_4">起動方法</h3>
 <p><strong>macOS / Windows (WSL2 あり)</strong></p>
-<p><code>start_heatmap.command</code> をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる</p>
+<p>macOS では <code>start_heatmap.command</code> をダブルクリックするか、ターミナルで以下を実行する。ダブルクリックでの起動ではターミナルが開くと同時にデフォルトブラウザが自動で起動されるため個別にブラウザを開く必要はない。開いたターミナルを終了させるとブラウザのウィンドウも閉じる</p>
+<p>WSL2 では通常ダブルクリックでの起動ができないため、WSL2 のターミナル（Ubuntu 等）から実行する</p>
 <pre><code class="language-bash">bash ~/heatmap/start_heatmap.command
 </code></pre>
 <blockquote>
 <p><strong>macOS の初回のみ:</strong> ダウンロードした zip 由来のファイルは初回起動時にブロックされるため、<code>start_heatmap.command</code> を右クリック →「開く」で起動する。2回目以降はダブルクリックで起動できる</p>
+<p><strong>WSL2 でブラウザが自動で開かない場合:</strong> <code>wslu</code>（<code>sudo apt install wslu</code>）を導入すると Windows 側の既定ブラウザが自動で開くようになる。未導入でも起動自体は問題なく、その場合はターミナルに表示される URL（<code>http://localhost:8765/heatmap.html</code>）を手動でブラウザに入力すればよい</p>
 </blockquote>
 <p>（Python の場所を自分で管理している場合は <code>python3 ~/heatmap/propmap_server.py</code> の直接起動でもよい）</p>
 <p><strong>Windows (WSL2 なし)</strong></p>
@@ -808,21 +810,22 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
   --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
   --output ../data/cqwpx_cw_2024_approx.json
 </code></pre>
-<h3 id="_25">アニメーション（点滅）やドラッグ操作がカクつく・止まる</h3>
+<h3 id="play_1">アニメーション（点滅）やドラッグ操作がカクつく・止まる、Play が間引かれる</h3>
 <ul>
 <li>PropMap のタブをバックグラウンドにするとブラウザのタイマー制限により点滅が一時停止する。これはブラウザの仕様であり不具合ではない</li>
 <li>他タブ・ウィンドウで重い処理（動画・WebGL 等）を開いている場合、CPU リソース競合によりカクつくことがある。PropMap タブをアクティブにし、他の重いページを閉じると改善する</li>
 <li>地図をドラッグして中心を変更する操作（<strong>Fixed</strong> チェックなし時や <strong>Pan</strong> モード）も連続的な再描画を伴うため、同様に他タブでのCPU競合があるとカクつくことがある。対処は上記と同じ</li>
+<li>他タブを閉じても改善しない場合、PC 自体の空きメモリ・CPU に余裕が無いことが原因のことがある。特に複数年マージ表示や、CQ WW / CQ WPX のようなデータ量の多いコンテスト（JSON ファイルが1件で200MB超になることもある）を選択している場合、扱うデータ量が大きくブラウザの負荷が上がる。<strong>Play</strong> での自動再生時にコマ落ちする場合はこれが原因であることが多く、対象年を絞る・Dist（表示距離）を狭める・他のアプリを終了するなどでブラウザの負荷を下げると改善する</li>
 </ul>
-<h3 id="_26">初回読み込みが遅い</h3>
+<h3 id="_25">初回読み込みが遅い</h3>
 <p>JSON ファイルは 1 ファイルあたり数十〜200MB 超になる場合があり、初回読み込みに数秒かかることがある。これはデータ量に起因するものであり、2 回目以降はブラウザキャッシュが効く</p>
-<h3 id="_27">ブラウザ互換性</h3>
+<h3 id="_26">ブラウザ互換性</h3>
 <p>Chrome / Safari / Edge で動作確認済み。Firefox でも動作するが、大量データ処理時のパフォーマンスに差が出ることがある</p>
-<h3 id="_28">スマートフォン・タブレットでの利用</h3>
+<h3 id="_27">スマートフォン・タブレットでの利用</h3>
 <p>動作確認・使用を想定していない。PC ブラウザでの利用を前提とする</p>
 <hr />
 <h2 id="12-tips">12. Tips</h2>
-<h3 id="_29">一度止めて再度起動した後、開いたままのページはどうなるか</h3>
+<h3 id="_28">一度止めて再度起動した後、開いたままのページはどうなるか</h3>
 <p><code>start_heatmap</code> を一度止めてからまた起動しても、開いたままのブラウザタブ（<code>heatmap.html</code> / <code>update.html</code>）をわざわざ閉じて開き直す必要はない。年やコンテストを選び直すなど何か操作すれば、また普通に動くようになる</p>
 <p>ただし「データ更新」ページ（<code>update.html</code>）で進捗表示中だった場合は、再起動後に自動では元に戻らないことがある。ページを再読み込みするか、「確認する」を押し直せば通常どおり使える</p>
 <p>途中までしか終わっていなかった作業をやり直しても、既に終わっている部分がもう一度繰り返されることはない（「事前データ準備」章の中断・再開についての説明を参照）</p>

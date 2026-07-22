@@ -21,7 +21,18 @@ else
 fi
 SERVER_PID=$!
 sleep 0.8
-open "http://localhost:$PORT/heatmap.html"
+URL="http://localhost:$PORT/heatmap.html"
+# open: macOS。wslview: WSL2（wslu導入済みの場合、Windows側の既定ブラウザを開く）。
+# xdg-open: 一般的なLinuxデスクトップ。どれも無ければURLを表示するのみ。
+if command -v open >/dev/null 2>&1; then
+  open "$URL"
+elif command -v wslview >/dev/null 2>&1; then
+  wslview "$URL"
+elif command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$URL" >/dev/null 2>&1
+else
+  echo "ブラウザを自動で開けませんでした。以下のURLを手動で開いてください:"
+fi
 echo "Server running at http://localhost:$PORT  (python: $PYTHON)"
 echo "Close this window to stop."
 trap "kill $SERVER_PID 2>/dev/null" INT TERM EXIT

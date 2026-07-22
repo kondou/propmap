@@ -142,11 +142,13 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <p>Extract the zip (or clone the repository) so that the files sit at <code>~/heatmap/</code> (macOS/Linux/WSL2) or <code>%USERPROFILE%\heatmap\</code> (Windows, e.g. <code>C:\Users\YourName\heatmap\</code>).</p>
 <h3 id="launching-the-application">Launching the Application</h3>
 <p><strong>macOS / Windows (with WSL2)</strong></p>
-<p>Double-click <code>start_heatmap.command</code>, or run the following in a terminal. When double-clicked, a terminal opens and the default browser launches automatically — no need to open the browser separately. Closing the terminal window stops the server.</p>
+<p>On macOS, double-click <code>start_heatmap.command</code>, or run the following in a terminal. When double-clicked, a terminal opens and the default browser launches automatically — no need to open the browser separately. Closing the terminal window stops the server.</p>
+<p>On WSL2, double-clicking usually isn't available, so run this from a WSL2 terminal (Ubuntu, etc.) instead:</p>
 <pre><code class="language-bash">bash ~/heatmap/start_heatmap.command
 </code></pre>
 <blockquote>
 <p><strong>macOS, first launch only:</strong> files extracted from a downloaded zip are blocked on first launch. Right-click <code>start_heatmap.command</code> → "Open" the first time; afterwards a plain double-click works.</p>
+<p><strong>WSL2, if the browser doesn't open automatically:</strong> installing <code>wslu</code> (<code>sudo apt install wslu</code>) makes it open your default Windows browser automatically. Without it, the server still starts fine — just open the URL shown in the terminal (<code>http://localhost:8765/heatmap.html</code>) manually.</p>
 </blockquote>
 <p>(If you manage your own Python, launching <code>python3 ~/heatmap/propmap_server.py</code> directly is also fine.)</p>
 <p><strong>Windows (without WSL2)</strong></p>
@@ -766,11 +768,12 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
   --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
   --output ../data/cqwpx_cw_2024_approx.json
 </code></pre>
-<h3 id="the-blinking-animation-or-dragging-stutters-or-stops">The blinking animation or dragging stutters or stops</h3>
+<h3 id="the-blinking-animation-or-dragging-stutters-or-stops-or-play-skips-frames">The blinking animation or dragging stutters or stops, or Play skips frames</h3>
 <ul>
 <li>Putting the PropMap tab in the background pauses the blinking due to browser timer throttling. This is normal browser behavior, not a bug.</li>
 <li>If another tab or window is running something CPU-heavy (video playback, WebGL, etc.), CPU contention can cause stutter. Making the PropMap tab active and closing other heavy pages usually helps.</li>
 <li>Dragging the map to recenter it (with <strong>Fixed</strong> unchecked, or in <strong>Pan</strong> mode) also involves continuous redrawing, so it can stutter under the same CPU-contention conditions as the blinking animation. The remedy is the same as above.</li>
+<li>If closing other tabs doesn't help, the PC itself may not have enough free memory or CPU headroom. This is especially true when merging multiple years, or with data-heavy contests like CQ WW / CQ WPX (a single JSON file can exceed 200MB), since the browser has more data to handle. Dropped frames during <strong>Play</strong> playback are often caused by this — narrowing the selected years, reducing Dist (display distance), or closing other applications to lighten the load usually helps.</li>
 </ul>
 <h3 id="the-first-load-is-slow">The first load is slow</h3>
 <p>JSON files can range from tens of MB to over 200MB each, so the first load can take a few seconds. This is due to the data volume; subsequent loads benefit from the browser cache.</p>

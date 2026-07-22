@@ -41,13 +41,17 @@ Extract the zip (or clone the repository) so that the files sit at `~/heatmap/` 
 
 **macOS / Windows (with WSL2)**
 
-Double-click `start_heatmap.command`, or run the following in a terminal. When double-clicked, a terminal opens and the default browser launches automatically — no need to open the browser separately. Closing the terminal window stops the server.
+On macOS, double-click `start_heatmap.command`, or run the following in a terminal. When double-clicked, a terminal opens and the default browser launches automatically — no need to open the browser separately. Closing the terminal window stops the server.
+
+On WSL2, double-clicking usually isn't available, so run this from a WSL2 terminal (Ubuntu, etc.) instead:
 
 ```bash
 bash ~/heatmap/start_heatmap.command
 ```
 
 > **macOS, first launch only:** files extracted from a downloaded zip are blocked on first launch. Right-click `start_heatmap.command` → "Open" the first time; afterwards a plain double-click works.
+
+> **WSL2, if the browser doesn't open automatically:** installing `wslu` (`sudo apt install wslu`) makes it open your default Windows browser automatically. Without it, the server still starts fine — just open the URL shown in the terminal (`http://localhost:8765/heatmap.html`) manually.
 
 (If you manage your own Python, launching `python3 ~/heatmap/propmap_server.py` directly is also fine.)
 
@@ -637,11 +641,12 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
   --output ../data/cqwpx_cw_2024_approx.json
 ```
 
-### The blinking animation or dragging stutters or stops
+### The blinking animation or dragging stutters or stops, or Play skips frames
 
 - Putting the PropMap tab in the background pauses the blinking due to browser timer throttling. This is normal browser behavior, not a bug.
 - If another tab or window is running something CPU-heavy (video playback, WebGL, etc.), CPU contention can cause stutter. Making the PropMap tab active and closing other heavy pages usually helps.
 - Dragging the map to recenter it (with **Fixed** unchecked, or in **Pan** mode) also involves continuous redrawing, so it can stutter under the same CPU-contention conditions as the blinking animation. The remedy is the same as above.
+- If closing other tabs doesn't help, the PC itself may not have enough free memory or CPU headroom. This is especially true when merging multiple years, or with data-heavy contests like CQ WW / CQ WPX (a single JSON file can exceed 200MB), since the browser has more data to handle. Dropped frames during **Play** playback are often caused by this — narrowing the selected years, reducing Dist (display distance), or closing other applications to lighten the load usually helps.
 
 ### The first load is slow
 
