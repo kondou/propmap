@@ -41,6 +41,11 @@ time of year.
 2. Double-click `start_heatmap.command` (macOS) or `start_heatmap.bat`
    (Windows)
    - macOS, first launch only: right-click → Open to pass Gatekeeper
+   - Windows: if a "Security Warning" dialog says the publisher could not
+     be verified, click **Run**. To stop it appearing every time, right-click
+     `start_heatmap.bat` → Properties → check **Unblock** → OK (or unblock
+     the whole extracted folder at once with PowerShell:
+     `Get-ChildItem -Recurse | Unblock-File`)
 3. Your browser opens `http://localhost:8765` automatically
 
 The server binds to 127.0.0.1 only and is not reachable from other machines.

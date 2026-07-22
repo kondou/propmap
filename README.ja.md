@@ -40,6 +40,11 @@ Network）スポットデータをもとに、過去の HF 帯伝搬を自局グ
 2. `start_heatmap.command`（macOS）または `start_heatmap.bat`（Windows）を
    ダブルクリックする
    - macOS の初回のみ: 右クリック →「開く」で Gatekeeper を通す
+   - Windows: 「発行元を確認できませんでした」というセキュリティ警告が出たら
+     「実行」をクリックする。毎回出るのを止めたい場合は `start_heatmap.bat`
+     を右クリック →「プロパティ」→「許可する」（ブロックの解除）に
+     チェック → OK（展開したフォルダ全体をまとめて解除したい場合は
+     PowerShell で `Get-ChildItem -Recurse | Unblock-File` を実行）
 3. ブラウザが自動的に `http://localhost:8765` を開く
 
 サーバーは 127.0.0.1 のみにバインドされ、他の PC からはアクセスできない。

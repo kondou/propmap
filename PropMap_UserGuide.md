@@ -61,6 +61,11 @@ bash ~/heatmap/start_heatmap.command
 
 （Python の場所を自分で管理している場合は `python %USERPROFILE%\heatmap\propmap_server.py` の直接起動でもよい）
 
+> **Windows で「発行元を確認できませんでした」という警告が出る場合:** そのまま「実行」をクリックすれば起動する。この警告が毎回出るのを止めたい場合は、`start_heatmap.bat` を右クリック →「プロパティ」→ 下部の「許可する」（ブロックの解除）にチェックを入れて「OK」。他の `.bat` ファイルも含めて展開フォルダ全体をまとめて解除したい場合は、PowerShell で以下を実行する:
+> ```powershell
+> Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File
+> ```
+
 起動後、ブラウザで `http://localhost:8765` にアクセスする
 
 起動スクリプトは利用可能な Python 3.10 以上を自動検出して使用する。見つからない場合はその場で案内が出て、同意すれば **uv** を導入し Python 本体も自動調達するため、**通常は Python の事前インストールは不要**（コンパイラや開発環境も不要）。手動で導入・管理したい場合は「[（参考）Python の手動インストール](#参考python-の手動インストール)」を参照

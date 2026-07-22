@@ -61,6 +61,11 @@ Double-click `start_heatmap.bat`, or run the following in Command Prompt:
 
 (If you manage your own Python, launching `python %USERPROFILE%\heatmap\propmap_server.py` directly is also fine.)
 
+> **If Windows shows a "the publisher could not be verified" warning:** click **Run** to continue. To stop it appearing every time, right-click `start_heatmap.bat` → Properties → check **Unblock** near the bottom → OK. To unblock the whole extracted folder (including the other `.bat` files) at once, run this in PowerShell:
+> ```powershell
+> Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File
+> ```
+
 After launching, open `http://localhost:8765` in your browser.
 
 The launcher auto-detects a usable Python 3.10+. If none is found, it offers guidance on the spot: with your consent, **uv** is installed and fetches a standalone Python binary — so **a prior Python install is normally unnecessary** (no compiler or developer environment either). For manual installs see "[(Reference) Manual Python Installation](#reference-manual-python-installation)".

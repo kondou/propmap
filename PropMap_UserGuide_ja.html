@@ -154,6 +154,11 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 <pre><code>%USERPROFILE%\heatmap\start_heatmap.bat
 </code></pre>
 <p>（Python の場所を自分で管理している場合は <code>python %USERPROFILE%\heatmap\propmap_server.py</code> の直接起動でもよい）</p>
+<blockquote>
+<p><strong>Windows で「発行元を確認できませんでした」という警告が出る場合:</strong> そのまま「実行」をクリックすれば起動する。この警告が毎回出るのを止めたい場合は、<code>start_heatmap.bat</code> を右クリック →「プロパティ」→ 下部の「許可する」（ブロックの解除）にチェックを入れて「OK」。他の <code>.bat</code> ファイルも含めて展開フォルダ全体をまとめて解除したい場合は、PowerShell で以下を実行する:
+<code>powershell
+Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File</code></p>
+</blockquote>
 <p>起動後、ブラウザで <code>http://localhost:8765</code> にアクセスする</p>
 <p>起動スクリプトは利用可能な Python 3.10 以上を自動検出して使用する。見つからない場合はその場で案内が出て、同意すれば <strong>uv</strong> を導入し Python 本体も自動調達するため、<strong>通常は Python の事前インストールは不要</strong>（コンパイラや開発環境も不要）。手動で導入・管理したい場合は「<a href="#参考python-の手動インストール">（参考）Python の手動インストール</a>」を参照</p>
 <p>サーバーは <code>127.0.0.1</code> にのみバインドされるため、他のPCからはアクセスできない。従来どおり <code>python3 -m http.server 8765</code> で起動しても地図表示は動作するが、その場合「データ更新」機能（下記）は使用できない</p>
