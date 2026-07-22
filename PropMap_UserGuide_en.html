@@ -511,8 +511,9 @@ Radius: 20,000km
 <p>PropMap requires data to be prepared in advance — it is too large to bundle with the tool. There are two ways to obtain it:</p>
 <ul>
 <li><strong>Download pre-built data (recommended)</strong>: fetch ready-made JSON published by the project. Takes minutes</li>
-<li><strong>Build it yourself (advanced)</strong>: run the full pipeline from public logs and RBN raw data. Suited to importing a year not yet published as pre-built data, or to verification. A full build downloads several GB and takes hours</li>
+<li><strong>Build it yourself (advanced)</strong>: run the full pipeline from public logs and RBN raw data covering the same contest period. Suited to importing a year not yet published as pre-built data, or to verification. A full build downloads several GB and takes hours</li>
 </ul>
+<p><strong>Once data is prepared, using PropMap needs no internet connection.</strong> The map, its terrain data (<code>countries-50m.json</code>), and heatmap playback all run entirely from local files. An internet connection is only needed to prepare or refresh data.</p>
 <h3 id="downloading-pre-built-data-recommended">Downloading Pre-built Data (Recommended)</h3>
 <p><strong>From the browser</strong></p>
 <p>With the server started via <code>start_heatmap</code> (propmap_server.py) running, open the "⟳ Data update" link on the map screen or <code>http://localhost:8765/update.html</code>, and click "Check" under "1. Download pre-built data". A list of distributed contest-years with sizes appears; select what you want and click "Download selected". Items already held are marked "held" and are not re-downloaded.</p>
@@ -585,7 +586,7 @@ step5_rbn.py                    CSV → JSON aggregation (for heatmap.html)
 <h3 id="importing-newly-published-years-check_new_logspy">Importing Newly Published Years (check_new_logs.py)</h3>
 <p>To check whether a new contest year has been published, review the disk-usage estimate, and import it, there are two methods: <strong>from the browser</strong> and <strong>from the command line</strong>. Target years are derived automatically from the contest schedule, so neither method requires hardcoded year updates.</p>
 <p><strong>From the browser (recommended)</strong></p>
-<p>With the server started via <code>start_heatmap</code> (propmap_server.py) running, open the "⟳ Data update" link next to the Contest selector on the map screen, or <code>http://localhost:8765/update.html</code>. Under "2. Build from public logs", click "Check" → review the estimate table → "Download and import". The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).</p>
+<p>With the server started via <code>start_heatmap</code> (propmap_server.py) running, open the "⟳ Data update" link next to the Contest selector on the map screen, or <code>http://localhost:8765/update.html</code>. Under "2. Build from public logs + RBN", click "Check" → review the estimate table → "Download and import". The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).</p>
 <p><strong>From the command line</strong></p>
 <pre><code class="language-bash">cd ~/heatmap/contest_logs
 python3 check_new_logs.py --dry-run   # availability check and estimate only

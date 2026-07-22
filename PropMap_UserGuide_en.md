@@ -412,7 +412,9 @@ RBN (Reverse Beacon Network) is a network that automatically receives, decodes, 
 PropMap requires data to be prepared in advance — it is too large to bundle with the tool. There are two ways to obtain it:
 
 - **Download pre-built data (recommended)**: fetch ready-made JSON published by the project. Takes minutes
-- **Build it yourself (advanced)**: run the full pipeline from public logs and RBN raw data. Suited to importing a year not yet published as pre-built data, or to verification. A full build downloads several GB and takes hours
+- **Build it yourself (advanced)**: run the full pipeline from public logs and RBN raw data covering the same contest period. Suited to importing a year not yet published as pre-built data, or to verification. A full build downloads several GB and takes hours
+
+**Once data is prepared, using PropMap needs no internet connection.** The map, its terrain data (`countries-50m.json`), and heatmap playback all run entirely from local files. An internet connection is only needed to prepare or refresh data.
 
 ### Downloading Pre-built Data (Recommended)
 
@@ -533,7 +535,7 @@ To check whether a new contest year has been published, review the disk-usage es
 
 **From the browser (recommended)**
 
-With the server started via `start_heatmap` (propmap_server.py) running, open the "⟳ Data update" link next to the Contest selector on the map screen, or `http://localhost:8765/update.html`. Under "2. Build from public logs", click "Check" → review the estimate table → "Download and import". The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).
+With the server started via `start_heatmap` (propmap_server.py) running, open the "⟳ Data update" link next to the Contest selector on the map screen, or `http://localhost:8765/update.html`. Under "2. Build from public logs + RBN", click "Check" → review the estimate table → "Download and import". The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).
 
 **From the command line**
 

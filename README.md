@@ -58,12 +58,18 @@ installing, from the "Data update" page linked from the map screen:
 
 - **Download pre-built data (recommended):** fetch ready-made heatmap JSON
   published on the project's rolling release. Takes minutes
-- **Build from public logs (advanced):** run the full pipeline yourself —
-  useful for years not yet published as pre-built data. A full build
-  downloads many gigabytes and can take hours
+- **Build from public logs and RBN (advanced):** run the full pipeline
+  yourself from public contest logs and RBN (Reverse Beacon Network) spot
+  data covering the same contest period — useful for years not yet
+  published as pre-built data. A full build downloads many gigabytes and
+  can take hours
 
 Both are also available from the command line (`fetch_prebuilt.py` /
 `generate_all.sh`); see the user guide.
+
+**Once data is prepared, PropMap needs no internet connection.** The map,
+its terrain data, and the heatmap/replay all run from files on your own
+machine; an internet connection is only needed to prepare or refresh data.
 
 ## Documentation
 
