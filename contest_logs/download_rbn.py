@@ -132,17 +132,22 @@ def download_zip(date_obj, raw_dir, dry_run=False):
 
     print(msg(f"  ダウンロード中: {fname} ...",
               f"  Downloading: {fname} ..."), end="", flush=True)
+    # 中断時に壊れたzipを「完了」として残さないよう、.partに書いてから
+    # rename する（rename前は dest が存在しないため、再実行時は正しく
+    # 再ダウンロード対象になる）
+    part = dest.with_suffix(dest.suffix + ".part")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as f:
+        with urllib.request.urlopen(req, timeout=60) as resp, open(part, "wb") as f:
             f.write(resp.read())
+        part.replace(dest)
         size_kb = dest.stat().st_size // 1024
         print(f" {size_kb:,}KB")
         return "downloaded"
     except Exception as e:
         print(msg(f" エラー: {e}", f" Error: {e}"))
-        if dest.exists():
-            dest.unlink()
+        if part.exists():
+            part.unlink()
         return "error"
 
 def run(contests, years, dry_run=False):

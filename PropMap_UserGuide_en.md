@@ -548,6 +548,10 @@ python3 check_new_logs.py --contest cqwpx_cw   # limit to one contest
 
 The estimate shows three items: public-log download size / RBN zip size / converted JSON size. Public logs and JSON are estimated from existing years; RBN zip sizes are measured via HEAD requests. If free disk space is below the estimated total, the run is aborted before starting. RBN raw data is kept as zips and only extracted temporarily during JSON generation (as before).
 
+**About how long it takes:** since raw logs and RBN data are fetched and processed from scratch, even a single contest/year can take an hour or more depending on your PC and connection speed, and large contests can take several hours. Progress is shown as a step name only, with no percentage, so a long wait with no visible change is usually still normal processing.
+
+**About interruption and resuming:** if processing is interrupted (PC sleep/shutdown, closing the window, etc.), running "Check" then "Download and import" again resumes from the incomplete step instead of re-running steps that already finished (the same scheme as `generate_all.sh`). A file interrupted mid-download is never treated as "complete" either — it is correctly re-fetched on the next run.
+
 ### Script Reference
 
 | Script | Role |

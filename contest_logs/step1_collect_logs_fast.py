@@ -36,7 +36,7 @@ import urllib.request, urllib.error
 from pathlib import Path
 from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
+from threading import Lock, get_ident
 
 # ---- i18n -------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).parent))
@@ -293,7 +293,11 @@ def download_one(url: str, save_dir: Path, resume: bool,
         with _lock: _cnt["skip"] += 1
         return "skip"
 
-    path.write_text(content, encoding="utf-8")
+    # 中断時に不完全なファイルを「完了」として残さないよう、一時ファイルに
+    # 書いてから rename する
+    tmp = path.with_suffix(path.suffix + f".part{get_ident()}")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(path)
     with _lock: _cnt["done"] += 1
     return "new"
 

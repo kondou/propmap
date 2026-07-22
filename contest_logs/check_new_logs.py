@@ -35,7 +35,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from contest_utils import (msg, CONTEST_CFG, BASE_DIR, HEATMAP_DIR,
                            available_years, get_rbn_dates, raw_log_dir,
                            rbn_raw_dir, qso_json, rbn_json,
-                           qso_approx_json, rbn_approx_json)
+                           qso_approx_json, rbn_approx_json,
+                           spotted_grids_csv, spotted_grids_approx_csv,
+                           qso_pairs_csv, qso_pairs_approx_csv,
+                           rbn_pairs_csv, rbn_pairs_approx_csv)
 
 SCRIPT_DIR = Path(__file__).parent
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -148,6 +151,31 @@ def held_years(contest: str) -> list:
     return sorted(years)
 
 
+def completed_years(contest: str) -> list:
+    """
+    ヒートマップ表示に必要な基本JSON（{contest}_{year}.json）が生成済み
+    （かつ空データでない）年のリスト。gather_targets() の「取り込み済み
+    なので対象から除外」判定に使う。
+
+    raw ログだけ取得済みで後続ステップが未完了（構築中に中断した等）の
+    年はここに含めない。そうした年は「確認」で再度対象として提示され、
+    should_skip_step により完了済みステップは再実行せず未完了部分から
+    再開する。
+    """
+    years = []
+    for y in held_years(contest):
+        p = qso_json(contest, y)
+        if not p.exists():
+            continue
+        try:
+            if '"grids":{}' in p.read_text(encoding="utf-8"):
+                continue
+        except OSError:
+            continue
+        years.append(y)
+    return years
+
+
 def dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
@@ -234,13 +262,13 @@ def gather_targets(contests=None, all_missing=False):
         contests = list(CONTEST_CFG.keys())
     targets, unpublished = [], []
     for contest in contests:
-        held = held_years(contest)
-        newest_held = max(held) if held else 0
+        completed = completed_years(contest)
+        newest_completed = max(completed) if completed else 0
         label = CONTEST_CFG[contest]["label"]
         for year in available_years(contest):
-            if year in held:
+            if year in completed:
                 continue
-            if not all_missing and year <= newest_held:
+            if not all_missing and year <= newest_completed:
                 continue
             n = probe_public_logs(contest, year)
             if n is None:
@@ -319,6 +347,53 @@ def run_cmd(cmd: list, label: str) -> bool:
     return True
 
 
+def _step_output(step_name: str, contest: str, year: int):
+    """
+    ステップ名（pipeline_steps のラベル先頭語）から、generate_all.sh の
+    should_skip と同じ判定に使う出力パスを返す。
+    戻り値: (path, kind) / None（download_rbn など内部スキップ管理のもの）
+    kind: "dir"（*.txt有無で判定） / "file"（存在+空grids判定）
+    """
+    mapping = {
+        "step1":                     (raw_log_dir(contest, year), "dir"),
+        "make_spotted_grids":        (spotted_grids_csv(contest, year), "file"),
+        "make_spotted_grids_approx": (spotted_grids_approx_csv(contest, year), "file"),
+        "step4_crosscheck":          (qso_pairs_csv(contest, year), "file"),
+        "step5_aggregate":           (qso_json(contest, year), "file"),
+        "step4_crosscheck_approx":   (qso_pairs_approx_csv(contest, year), "file"),
+        "step5_aggregate_approx":    (qso_approx_json(contest, year), "file"),
+        "step4_rbn":                 (rbn_pairs_csv(contest, year), "file"),
+        "step5_rbn":                 (rbn_json(contest, year), "file"),
+        "step4_rbn_approx":          (rbn_pairs_approx_csv(contest, year), "file"),
+        "step5_rbn_approx":          (rbn_approx_json(contest, year), "file"),
+    }
+    return mapping.get(step_name)
+
+
+def should_skip_step(label: str, contest: str, year: int) -> bool:
+    """
+    generate_all.sh の should_skip と同じ判定（既存出力があれば再実行しない。
+    ただし JSON で grids が空の場合は再実行する）。
+    label はステップ名で始まる文字列（例: "step1 iaru 2025"）を想定。
+    """
+    step_name = label.split()[0]
+    out = _step_output(step_name, contest, year)
+    if out is None:
+        return False  # download_rbn 等: 内部スキップに任せ、常に呼ぶ
+    path, kind = out
+    if kind == "dir":
+        return path.is_dir() and any(path.glob("*.txt"))
+    if not path.exists():
+        return False
+    if path.suffix == ".json":
+        try:
+            if '"grids":{}' in path.read_text(encoding="utf-8"):
+                return False
+        except OSError:
+            pass
+    return True
+
+
 def pipeline_steps(contest: str, year: int) -> list:
     """
     generate_all.sh の run_contest と同じコマンド列を返す。
@@ -389,6 +464,9 @@ def pipeline_steps(contest: str, year: int) -> list:
 def run_pipeline(contest: str, year: int) -> bool:
     """CLI用: pipeline_steps を順次実行。前段失敗時は後段を実行しない"""
     for label, cmd in pipeline_steps(contest, year):
+        if should_skip_step(label, contest, year):
+            print(msg(f"  [スキップ] {label}", f"  [SKIP] {label}"))
+            continue
         if not run_cmd(cmd, label):
             return False
     return True

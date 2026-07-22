@@ -164,6 +164,10 @@ def _import_worker(targets):
             with _lock:
                 _job["step_index"] = i
                 _job["step_label"] = label
+            if cnl.should_skip_step(label, t["contest"], t["year"]):
+                _log_line(msg(f"  [スキップ] {label}", f"  [SKIP] {label}"))
+                results.setdefault(key, True)
+                continue
             _log_line(f"==== [{i}/{len(all_steps)}] {label} ====")
             rc = _run_step(cmd)
             if rc != 0:
