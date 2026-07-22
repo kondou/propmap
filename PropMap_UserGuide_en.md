@@ -574,3 +574,71 @@ The estimate shows three items: public-log download size / RBN zip size / conver
 | `check_rbn_detail.py` | Inspect record structure of `*_rbn.json` (debug) |
 | `check_rbn_csv.py` | Inspect utc_day distribution in RBN CSV (debug) |
 | `check_rbn_json.py` | Inspect t_step distribution in RBN JSON (debug) |
+
+---
+
+## 11. Troubleshooting
+
+### Opening `heatmap.html` directly in a browser shows no data
+
+The `file://` protocol blocks JSON loading due to browser security restrictions. Always access it through a local server (see "[Launching the Application](#launching-the-application)").
+
+### No panels are shown at all
+
+Check in the following order.
+
+1. **Confirm the JSON files exist**
+   Check whether the target file (e.g. `cqwpx_cw_2024.json`) exists in `data/`. If not, regenerate it with `generate_all.sh` (or `.bat`). Add `--force` if you want to force a step to re-run even when the file already exists.
+
+   ```bash
+   cd ~/heatmap/contest_logs
+   bash generate_all.sh          # only process what's missing
+   bash generate_all.sh --force  # force re-run every step
+   ```
+
+2. **Check the contest/year/filter settings**
+   Confirm the Band / Mode / Dist / Year selections are what you intended. In particular, a Dist that's too small will leave little to display.
+
+3. **Check at the CSV level (QSO)**
+   ```bash
+   python3 check_qso_count.py --contest cqwpx_cw --year 2024 \
+     --center PM52 --dist-km 500 --hour 12 --min 0
+   ```
+   No results means there are no QSOs eligible for panel display for that contest/year/condition set.
+
+4. **Check at the CSV level (RBN)**
+   ```bash
+   python3 check_rbn_count.py --contest cqwpx_cw --year 2024 \
+     --center PM52 --dist-km 500 --hour 12 --min 0
+   ```
+
+### est. data is not shown
+
+`data/` has no `*_approx.json` file. `generate_all.sh` (or `.bat`) normally runs the approx step automatically as part of the full build. To manually regenerate approx data for a specific contest/year:
+
+```bash
+cd ~/heatmap/contest_logs
+python3 step4_crosscheck_approx.py --contest cqwpx_cw --year 2024 \
+  --max-call-dist 2 --band-fix-window 15 --annotate-logs
+python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
+  --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
+  --output ../data/cqwpx_cw_2024_approx.json
+```
+
+### The blinking animation or dragging stutters or stops
+
+- Putting the PropMap tab in the background pauses the blinking due to browser timer throttling. This is normal browser behavior, not a bug.
+- If another tab or window is running something CPU-heavy (video playback, WebGL, etc.), CPU contention can cause stutter. Making the PropMap tab active and closing other heavy pages usually helps.
+- Dragging the map to recenter it (with **Fixed** unchecked, or in **Pan** mode) also involves continuous redrawing, so it can stutter under the same CPU-contention conditions as the blinking animation. The remedy is the same as above.
+
+### The first load is slow
+
+JSON files can range from tens of MB to over 200MB each, so the first load can take a few seconds. This is due to the data volume; subsequent loads benefit from the browser cache.
+
+### Browser compatibility
+
+Tested on Chrome / Safari / Edge. Firefox also works, but performance may differ when processing large amounts of data.
+
+### Use on smartphones/tablets
+
+Not tested or intended for this use. A desktop browser is assumed.

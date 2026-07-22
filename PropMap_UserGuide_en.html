@@ -715,6 +715,60 @@ python3 check_new_logs.py --contest cqwpx_cw   # limit to one contest
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="11-troubleshooting">11. Troubleshooting</h2>
+<h3 id="opening-heatmaphtml-directly-in-a-browser-shows-no-data">Opening <code>heatmap.html</code> directly in a browser shows no data</h3>
+<p>The <code>file://</code> protocol blocks JSON loading due to browser security restrictions. Always access it through a local server (see "<a href="#launching-the-application">Launching the Application</a>").</p>
+<h3 id="no-panels-are-shown-at-all">No panels are shown at all</h3>
+<p>Check in the following order.</p>
+<ol>
+<li><strong>Confirm the JSON files exist</strong>
+   Check whether the target file (e.g. <code>cqwpx_cw_2024.json</code>) exists in <code>data/</code>. If not, regenerate it with <code>generate_all.sh</code> (or <code>.bat</code>). Add <code>--force</code> if you want to force a step to re-run even when the file already exists.</li>
+</ol>
+<p><code>bash
+   cd ~/heatmap/contest_logs
+   bash generate_all.sh          # only process what's missing
+   bash generate_all.sh --force  # force re-run every step</code></p>
+<ol>
+<li>
+<p><strong>Check the contest/year/filter settings</strong>
+   Confirm the Band / Mode / Dist / Year selections are what you intended. In particular, a Dist that's too small will leave little to display.</p>
+</li>
+<li>
+<p><strong>Check at the CSV level (QSO)</strong>
+   <code>bash
+   python3 check_qso_count.py --contest cqwpx_cw --year 2024 \
+     --center PM52 --dist-km 500 --hour 12 --min 0</code>
+   No results means there are no QSOs eligible for panel display for that contest/year/condition set.</p>
+</li>
+<li>
+<p><strong>Check at the CSV level (RBN)</strong>
+   <code>bash
+   python3 check_rbn_count.py --contest cqwpx_cw --year 2024 \
+     --center PM52 --dist-km 500 --hour 12 --min 0</code></p>
+</li>
+</ol>
+<h3 id="est-data-is-not-shown">est. data is not shown</h3>
+<p><code>data/</code> has no <code>*_approx.json</code> file. <code>generate_all.sh</code> (or <code>.bat</code>) normally runs the approx step automatically as part of the full build. To manually regenerate approx data for a specific contest/year:</p>
+<pre><code class="language-bash">cd ~/heatmap/contest_logs
+python3 step4_crosscheck_approx.py --contest cqwpx_cw --year 2024 \
+  --max-call-dist 2 --band-fix-window 15 --annotate-logs
+python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
+  --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
+  --output ../data/cqwpx_cw_2024_approx.json
+</code></pre>
+<h3 id="the-blinking-animation-or-dragging-stutters-or-stops">The blinking animation or dragging stutters or stops</h3>
+<ul>
+<li>Putting the PropMap tab in the background pauses the blinking due to browser timer throttling. This is normal browser behavior, not a bug.</li>
+<li>If another tab or window is running something CPU-heavy (video playback, WebGL, etc.), CPU contention can cause stutter. Making the PropMap tab active and closing other heavy pages usually helps.</li>
+<li>Dragging the map to recenter it (with <strong>Fixed</strong> unchecked, or in <strong>Pan</strong> mode) also involves continuous redrawing, so it can stutter under the same CPU-contention conditions as the blinking animation. The remedy is the same as above.</li>
+</ul>
+<h3 id="the-first-load-is-slow">The first load is slow</h3>
+<p>JSON files can range from tens of MB to over 200MB each, so the first load can take a few seconds. This is due to the data volume; subsequent loads benefit from the browser cache.</p>
+<h3 id="browser-compatibility">Browser compatibility</h3>
+<p>Tested on Chrome / Safari / Edge. Firefox also works, but performance may differ when processing large amounts of data.</p>
+<h3 id="use-on-smartphonestablets">Use on smartphones/tablets</h3>
+<p>Not tested or intended for this use. A desktop browser is assumed.</p>
 <script>
 document.querySelectorAll('pre').forEach(pre => {
   if (pre.querySelector('code.language-no-copy')) return;
