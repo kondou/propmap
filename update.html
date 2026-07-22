@@ -277,7 +277,13 @@ function renderPrebuiltTable(st) {
     $('pb-actions').style.display = 'none';
     return;
   }
-  let h = `<table><tr><th></th><th>${T('コンテスト','Contest')}</th>` +
+  const selectable = rows.filter(r => !r.held);
+  const allSelected = selectable.length > 0 &&
+    selectable.every(r => pbSelected.has(r.contest + '_' + r.year));
+  const masterCb = selectable.length
+    ? `<input type="checkbox" id="pb-select-all"${allSelected ? ' checked' : ''}>`
+    : '';
+  let h = `<table><tr><th>${masterCb}</th><th>${T('コンテスト','Contest')}</th>` +
           `<th>${T('年','Year')}</th><th class="num">${T('サイズ','Size')}</th></tr>`;
   for (const r of rows) {
     const key = r.contest + '_' + r.year;
@@ -290,13 +296,22 @@ function renderPrebuiltTable(st) {
   }
   h += '</table>';
   $('pbresult').innerHTML = h;
-  $('pbresult').querySelectorAll('input[type=checkbox]').forEach(cb => {
+  $('pbresult').querySelectorAll('input[type=checkbox][data-key]').forEach(cb => {
     cb.addEventListener('change', () => {
       if (cb.checked) pbSelected.add(cb.dataset.key);
       else pbSelected.delete(cb.dataset.key);
       updatePbTotals(st);
+      renderPrebuiltTable(st);
     });
   });
+  const master = $('pb-select-all');
+  if (master) {
+    master.addEventListener('change', () => {
+      if (master.checked) selectable.forEach(r => pbSelected.add(r.contest + '_' + r.year));
+      else pbSelected.clear();
+      renderPrebuiltTable(st);
+    });
+  }
   updatePbTotals(st);
 }
 

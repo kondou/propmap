@@ -17,6 +17,18 @@ body {
   padding: 32px 48px 80px;
 }
 h1 { font-size: 1.9em; border-bottom: 2px solid #444; padding-bottom: 0.35em; margin: 0.6em 0 0.8em; color: #e8e8e8; }
+h1 .lang-switch {
+  font-size: 0.45em;
+  font-weight: 400;
+  margin-left: 0.7em;
+  color: #7ab3e0;
+  text-decoration: none;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  padding: 2px 9px;
+  vertical-align: middle;
+}
+h1 .lang-switch:hover { background: #242424; text-decoration: underline; }
 h2 { font-size: 1.4em; border-bottom: 1px solid #333; padding-bottom: 0.25em; margin: 2.2em 0 0.8em; color: #e0e0e0; }
 h3 { font-size: 1.1em; margin: 1.6em 0 0.5em; color: #d8d8d8; }
 h4 { font-size: 1em; margin: 1.2em 0 0.4em; color: #cccccc; }
@@ -98,7 +110,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 </style>
 </head>
 <body>
-<h1 id="propmap">PropMap ユーザーガイド</h1>
+<h1 id="propmap">PropMap ユーザーガイド<a class="lang-switch" href="PropMap_UserGuide_en.html">English</a></h1>
 <hr />
 <h2 id="1">1. はじめに</h2>
 <h3 id="propmap_1">PropMapとは</h3>
@@ -787,10 +799,11 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
   --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
   --output ../data/cqwpx_cw_2024_approx.json
 </code></pre>
-<h3 id="_25">アニメーション（点滅）がカクつく・止まる</h3>
+<h3 id="_25">アニメーション（点滅）やドラッグ操作がカクつく・止まる</h3>
 <ul>
 <li>PropMap のタブをバックグラウンドにするとブラウザのタイマー制限により点滅が一時停止する。これはブラウザの仕様であり不具合ではない</li>
 <li>他タブ・ウィンドウで重い処理（動画・WebGL 等）を開いている場合、CPU リソース競合によりカクつくことがある。PropMap タブをアクティブにし、他の重いページを閉じると改善する</li>
+<li>地図をドラッグして中心を変更する操作（<strong>Fixed</strong> チェックなし時や <strong>Pan</strong> モード）も連続的な再描画を伴うため、同様に他タブでのCPU競合があるとカクつくことがある。対処は上記と同じ</li>
 </ul>
 <h3 id="_26">初回読み込みが遅い</h3>
 <p>JSON ファイルは 1 ファイルあたり数十〜200MB 超になる場合があり、初回読み込みに数秒かかることがある。これはデータ量に起因するものであり、2 回目以降はブラウザキャッシュが効く</p>

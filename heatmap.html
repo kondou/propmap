@@ -119,6 +119,9 @@ canvas#cv { display:block; cursor:crosshair; }
   padding:1px 2px; border-radius:2px; flex-shrink:0; }
 .year-item:hover { background:#253040; }
 .year-item input { accent-color:#4af; cursor:pointer; margin:0; }
+.year-item.no-data { color:#556; cursor:default; }
+.year-item.no-data:hover { background:none; }
+.year-item.no-data input { cursor:default; }
 /* グラフタイトル */
 .chart-title { font-size:10px; color:#99a; margin-bottom:2px; flex-shrink:0; }
 </style>
@@ -538,10 +541,18 @@ async function refreshDatasets(){
     document.getElementById('lnk-update').style.display = '';  // サーバー機能あり
     let changed = false;
     for(const k in CONTEST_CFG){
-      const ys = ds[k];
-      if(Array.isArray(ys) && ys.length > 0 &&
-         JSON.stringify(ys) !== JSON.stringify(CONTEST_CFG[k].years)){
-        CONTEST_CFG[k].years = ys;
+      const ys = Array.isArray(ds[k]) ? ds[k] : [];
+      // 既知の年レンジを縮めず、APIが報告する年（ハードコード範囲外の新規年も含む）と合わせる
+      const merged = [...new Set([...CONTEST_CFG[k].years, ...ys])].sort((a,b)=>a-b);
+      if(JSON.stringify(merged) !== JSON.stringify(CONTEST_CFG[k].years)){
+        CONTEST_CFG[k].years = merged;
+        changed = true;
+      }
+      const avail = new Set(ys);
+      if(!CONTEST_CFG[k].availableYears ||
+         JSON.stringify([...avail].sort((a,b)=>a-b)) !==
+         JSON.stringify([...CONTEST_CFG[k].availableYears].sort((a,b)=>a-b))){
+        CONTEST_CFG[k].availableYears = avail;
         changed = true;
       }
     }
@@ -2360,13 +2371,24 @@ function updateYearPanel(){
   const panel=document.getElementById('year-panel');
   const prev=getSelectedYears();
   panel.innerHTML='';
-  [...cfg.years].reverse().forEach(y=>{
+  const avail=cfg.availableYears;  // データ実在年のSet（未取得時はundefined=全年扱い）
+  const years=[...cfg.years].reverse();
+  const defaultYear=avail
+    ? (years.find(y=>avail.has(y)) ?? years[0])
+    : years[0];
+  years.forEach(y=>{
+    const hasData=!avail||avail.has(y);
     const label=document.createElement('label');
-    label.className='year-item';
+    label.className='year-item'+(hasData?'':' no-data');
     const cb=document.createElement('input');
     cb.type='checkbox'; cb.value=y;
-    cb.checked=prev.length>0?prev.includes(y):(y===cfg.years[cfg.years.length-1]);
-    cb.addEventListener('change',()=>loadData());
+    if(hasData){
+      cb.checked=prev.length>0?prev.includes(y):(y===defaultYear);
+      cb.addEventListener('change',()=>loadData());
+    }else{
+      cb.disabled=true;
+      label.title=isJa?'このコンテスト・年のデータがまだありません':'No data for this contest/year yet';
+    }
     label.appendChild(cb);
     label.appendChild(document.createTextNode(y));
     panel.appendChild(label);
