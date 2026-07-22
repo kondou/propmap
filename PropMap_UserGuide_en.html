@@ -778,6 +778,13 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
 <p>Tested on Chrome / Safari / Edge. Firefox also works, but performance may differ when processing large amounts of data.</p>
 <h3 id="use-on-smartphonestablets">Use on smartphones/tablets</h3>
 <p>Not tested or intended for this use. A desktop browser is assumed.</p>
+<hr />
+<h2 id="12-tips">12. Tips</h2>
+<h3 id="what-happens-to-an-already-open-page-after-stopping-and-restarting-the-server">What happens to an already-open page after stopping and restarting the server</h3>
+<p>After stopping <code>start_heatmap</code> and starting it again, you don't need to close and reopen browser tabs (<code>heatmap.html</code> / <code>update.html</code>) that were already open. Doing something like reselecting a year or contest is enough to get it working normally again.</p>
+<p>If a "Data update" page (<code>update.html</code>) was showing progress at the time, it may not pick back up automatically after a restart. Reloading the page, or clicking "Check" again, gets it working as usual.</p>
+<p>Redoing work that only got partway done doesn't repeat the parts that already finished (see the note on interruption and resuming in "Advance Data Preparation").</p>
+<p>When in doubt, reloading the browser (F5) is the simplest fix.</p>
 <script>
 document.querySelectorAll('pre').forEach(pre => {
   if (pre.querySelector('code.language-no-copy')) return;

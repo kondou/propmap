@@ -820,6 +820,13 @@ python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
 <p>Chrome / Safari / Edge で動作確認済み。Firefox でも動作するが、大量データ処理時のパフォーマンスに差が出ることがある</p>
 <h3 id="_28">スマートフォン・タブレットでの利用</h3>
 <p>動作確認・使用を想定していない。PC ブラウザでの利用を前提とする</p>
+<hr />
+<h2 id="12-tips">12. Tips</h2>
+<h3 id="_29">一度止めて再度起動した後、開いたままのページはどうなるか</h3>
+<p><code>start_heatmap</code> を一度止めてからまた起動しても、開いたままのブラウザタブ（<code>heatmap.html</code> / <code>update.html</code>）をわざわざ閉じて開き直す必要はない。年やコンテストを選び直すなど何か操作すれば、また普通に動くようになる</p>
+<p>ただし「データ更新」ページ（<code>update.html</code>）で進捗表示中だった場合は、再起動後に自動では元に戻らないことがある。ページを再読み込みするか、「確認する」を押し直せば通常どおり使える</p>
+<p>途中までしか終わっていなかった作業をやり直しても、既に終わっている部分がもう一度繰り返されることはない（「事前データ準備」章の中断・再開についての説明を参照）</p>
+<p>迷ったらブラウザの再読み込み（F5）が一番簡単</p>
 <script>
 document.querySelectorAll('pre').forEach(pre => {
   if (pre.querySelector('code.language-no-copy')) return;

@@ -654,3 +654,17 @@ Tested on Chrome / Safari / Edge. Firefox also works, but performance may differ
 ### Use on smartphones/tablets
 
 Not tested or intended for this use. A desktop browser is assumed.
+
+---
+
+## 12. Tips
+
+### What happens to an already-open page after stopping and restarting the server
+
+After stopping `start_heatmap` and starting it again, you don't need to close and reopen browser tabs (`heatmap.html` / `update.html`) that were already open. Doing something like reselecting a year or contest is enough to get it working normally again.
+
+If a "Data update" page (`update.html`) was showing progress at the time, it may not pick back up automatically after a restart. Reloading the page, or clicking "Check" again, gets it working as usual.
+
+Redoing work that only got partway done doesn't repeat the parts that already finished (see the note on interruption and resuming in "Advance Data Preparation").
+
+When in doubt, reloading the browser (F5) is the simplest fix.
