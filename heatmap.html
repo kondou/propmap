@@ -240,9 +240,10 @@ canvas#cv { display:block; cursor:crosshair; }
             <option value="cqwpx_cw">CQ WPX CW</option>
             <option value="cqwpx_ssb">CQ WPX SSB</option>
           </select>
-          <a id="lnk-update" href="./update.html" target="propmap_update"
+          <a id="lnk-update" href="./update.html" target="propmap_update" class="tt"
+             data-tip-key="lnk_update"
              style="display:none;font-size:11px;color:#7ab8ff;margin-left:6px;text-decoration:none;"
-             title="新規公開ログの確認と取り込み">⟳ データ更新</a>
+             >⟳ データ更新</a>
         </div>
       </div>
       <div class="ctrl-row" style="align-items:center;">
@@ -514,6 +515,7 @@ const TIPS={
   crawl_15s:    ['巡回間隔 15秒','Crawl interval: 15 s'],
   play_stop:    ['再生を停止','Stop playback'],
   rt_stop:      ['リアルタイム更新を停止','Stop real-time update'],
+  lnk_update:   ['新規公開ログの確認と取り込み','Check for and import newly published logs'],
 };
 function t(key){return isJa?TIPS[key][0]:TIPS[key][1];}
 
@@ -2968,6 +2970,7 @@ async function init(){
   document.querySelectorAll('[data-tip-key]').forEach(el=>{
     el.dataset.tip=t(el.dataset.tipKey);
   });
+  document.getElementById('lnk-update').textContent=isJa?'⟳ データ更新':'⟳ Data update';
   // 凡例バー描画（heatColor関数と連動）
   drawLegendBar('grad-bar-qso', heatColor);
   // デフォルト設定を復元
