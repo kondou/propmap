@@ -3,7 +3,7 @@
 import json, sys
 from pathlib import Path
 
-data_dir = Path.home() / "heatmap" / "data"
+data_dir = Path(__file__).resolve().parent / "data"
 
 for fname in sorted(data_dir.glob("*_rbn.json")):
     d = json.load(open(fname))

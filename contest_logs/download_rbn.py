@@ -111,7 +111,7 @@ def get_raw_dir():
             return Path(rbn_raw_dir())
         except Exception:
             pass
-    return Path.home() / "heatmap" / "contest_logs" / "rbn" / "raw"
+    return Path(__file__).resolve().parent / "rbn" / "raw"
 
 RBN_BASE_URL = "https://www.reversebeacon.net/raw_data/dl.php?f="
 

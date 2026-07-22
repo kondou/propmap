@@ -106,8 +106,9 @@ def main():
         _out = spotted_grids_csv(args.contest, args.year) if args.contest and args.year else None
     except (ImportError, ValueError) as e:
         cid  = f"{args.contest}_{args.year}" if args.year else args.contest
-        _raw = Path.home()/"heatmap"/"contest_logs"/"raw"/cid if cid else None
-        _out = Path.home()/"heatmap"/"contest_logs"/"rbn"/f"{cid}_spotted_grids.csv" if cid else None
+        _script_dir = Path(__file__).resolve().parent
+        _raw = _script_dir/"raw"/cid if cid else None
+        _out = _script_dir/"rbn"/f"{cid}_spotted_grids.csv" if cid else None
 
     raw_dir  = Path(args.raw_dir) if args.raw_dir else _raw
     out_path = Path(args.out)     if args.out     else _out

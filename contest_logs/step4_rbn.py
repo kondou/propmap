@@ -269,8 +269,9 @@ def main():
         _start = _end = None
         _rbn_csvs  = []
         cid = f"{args.contest}_{args.year}"
-        _log_grids = [Path.home()/"heatmap"/"contest_logs"/"rbn"/f"{cid}_spotted_grids.csv"]
-        _out_csv   = Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_rbn_pairs.csv"
+        _script_dir = Path(__file__).resolve().parent
+        _log_grids = [_script_dir/"rbn"/f"{cid}_spotted_grids.csv"]
+        _out_csv   = _script_dir/"csv"/f"{cid}_rbn_pairs.csv"
 
     start_dt = (datetime.strptime(args.start, "%Y-%m-%d %H:%M")
                 if args.start else _start)

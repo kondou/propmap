@@ -79,8 +79,9 @@ def main():
         _start_dt, _ = get_contest_dates(args.contest, args.year)
     except (ImportError, ValueError) as e:
         cid = f"{args.contest}_{args.year}"
-        _in  = [Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_qso_pairs.csv"]
-        _out = Path.home()/"heatmap"/"data"/f"{cid}.json"
+        _script_dir = Path(__file__).resolve().parent
+        _in  = [_script_dir/"csv"/f"{cid}_qso_pairs.csv"]
+        _out = _script_dir.parent/"data"/f"{cid}.json"
         _start_dt = None
 
     inputs = [Path(p) for p in args.input] if args.input else _in

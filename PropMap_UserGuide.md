@@ -35,7 +35,7 @@ PropMapは、アマチュア無線コンテストの公開ログデータおよ�
 
 ### 配置
 
-zip を展開（またはリポジトリを clone）し、`~/heatmap/`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap\`（Windows、例: `C:\Users\ユーザー名\heatmap\`）となるよう配置する
+zip を展開（またはリポジトリを clone）し、好きな場所に置く。フォルダ名も任意（`heatmap` である必要はない）。以降の説明では例として `~/heatmap/`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap\`（Windows、例: `C:\Users\ユーザー名\heatmap\`）を使うが、実際の配置先に読み替えること
 
 ### 起動方法
 

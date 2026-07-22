@@ -100,7 +100,7 @@ def main():
 
     suffix   = "_approx" if args.approx else ""
     csv_name = f"{args.contest}_{args.year}_qso_pairs{suffix}.csv"
-    csv_path = Path.home()/"heatmap"/"contest_logs"/"csv"/csv_name
+    csv_path = Path(__file__).resolve().parent/"contest_logs"/"csv"/csv_name
 
     if not csv_path.exists():
         print(msg(f"エラー: ファイルが見つかりません: {csv_path}",

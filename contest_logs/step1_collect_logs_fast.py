@@ -188,7 +188,7 @@ CONTEST_DEFS = {
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                           "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
-BASE_SAVE = Path.home() / "heatmap" / "contest_logs" / "raw"
+BASE_SAVE = Path(__file__).resolve().parent / "raw"
 
 # ---- HTMLパーサー ----------------------------------------------------------
 

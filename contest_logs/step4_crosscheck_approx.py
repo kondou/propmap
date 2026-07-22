@@ -261,9 +261,10 @@ def main():
         print(msg(f"警告: contest_utils未使用 ({e})",
                   f"Warning: contest_utils not available ({e})"))
         cid = f"{args.contest}_{args.year}"
-        _raw_dir = Path.home()/"heatmap"/"contest_logs"/"raw"/cid
-        _grids   = Path.home()/"heatmap"/"contest_logs"/"rbn"/f"{cid}_spotted_grids_approx.csv"
-        _out_csv = Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_qso_pairs_approx.csv"
+        _script_dir = Path(__file__).resolve().parent
+        _raw_dir = _script_dir/"raw"/cid
+        _grids   = _script_dir/"rbn"/f"{cid}_spotted_grids_approx.csv"
+        _out_csv = _script_dir/"csv"/f"{cid}_qso_pairs_approx.csv"
 
     raw_dir = Path(args.raw_dir)       if args.raw_dir      else _raw_dir
     grids_p = Path(args.approx_grids)  if args.approx_grids else _grids

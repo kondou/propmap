@@ -37,9 +37,10 @@ time of year.
 ## Quick start
 
 1. Download the [latest release zip](https://github.com/kondou/propmap/releases/latest/download/propmap-latest.zip)
-   (or clone this repository) and place it at `~/heatmap` (macOS/Linux/WSL2)
-   or `%USERPROFILE%\heatmap` (Windows). That link always points to the
-   newest version — bookmark it if you'd like
+   (or clone this repository) and place it anywhere you like — e.g.
+   `~/heatmap` (macOS/Linux/WSL2) or `%USERPROFILE%\heatmap` (Windows); the
+   folder name doesn't matter. That link always points to the newest
+   version — bookmark it if you'd like
 2. Double-click `start_heatmap.command` (macOS) or `start_heatmap.bat`
    (Windows)
    - macOS, first launch only: right-click → Open
@@ -61,8 +62,8 @@ The server binds to 127.0.0.1 only and is not reachable from other machines.
 Contest data (`data/`) is **not** part of the release zip, so it is not
 automatically carried over when you install a new version — extracting into
 a fresh folder starts you over with no data. To keep your existing data,
-**extract the new zip directly into your existing `~/heatmap` folder**
-(or `%USERPROFILE%\heatmap` on Windows) and confirm overwrite when asked,
+**extract the new zip directly into your existing PropMap folder**
+(wherever you placed it) and confirm overwrite when asked,
 instead of extracting into a new, differently-named folder (which is what
 your OS's unzip tool will suggest by default). Only the app files get
 overwritten; `data/` isn't touched since it isn't in the zip.

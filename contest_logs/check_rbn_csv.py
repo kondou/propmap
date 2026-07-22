@@ -3,7 +3,7 @@
 import csv, glob, sys
 from pathlib import Path
 
-csv_dir = Path.home() / "heatmap" / "contest_logs" / "csv"
+csv_dir = Path(__file__).resolve().parent / "csv"
 files = sorted(csv_dir.glob("*_rbn_pairs.csv"))
 
 if not files:

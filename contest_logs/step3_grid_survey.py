@@ -75,12 +75,12 @@ def main():
         contest=raw_dir.name
     elif args.contest:
         contest=args.contest
-        raw_dir=Path.home()/"heatmap"/"contest_logs"/"raw"/contest
+        raw_dir=Path(__file__).resolve().parent/"raw"/contest
     else:
         ap.error(msg("--contest または --raw-dir を指定してください",
                      "Specify --contest or --raw-dir"))
 
-    csv_dir=Path(args.out_dir) if args.out_dir else Path.home()/"heatmap"/"contest_logs"/"csv"
+    csv_dir=Path(args.out_dir) if args.out_dir else Path(__file__).resolve().parent/"csv"
     out_csv=csv_dir/f"{contest}_grid_survey.csv"
     csv_dir.mkdir(parents=True,exist_ok=True)
 

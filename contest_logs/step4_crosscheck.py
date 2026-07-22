@@ -306,8 +306,9 @@ def main():
     except (ImportError, ValueError) as e:
         print(msg(f"警告: contest_utils未使用 ({e})",
                   f"Warning: contest_utils not available ({e})"))
-        _raw_dir = Path.home() / "heatmap" / "contest_logs" / "raw" / f"{args.contest}_{args.year}"
-        _out_csv = Path.home() / "heatmap" / "contest_logs" / "csv" / f"{args.contest}_{args.year}_qso_pairs.csv"
+        _script_dir = Path(__file__).resolve().parent
+        _raw_dir = _script_dir / "raw" / f"{args.contest}_{args.year}"
+        _out_csv = _script_dir / "csv" / f"{args.contest}_{args.year}_qso_pairs.csv"
 
     raw_dir = Path(args.raw_dir) if args.raw_dir else _raw_dir
     csv_dir = Path(args.out_dir) if args.out_dir else _out_csv.parent

@@ -98,8 +98,10 @@ CONTEST_CFG = {
     },
 }
 
-BASE_DIR      = Path.home() / "heatmap" / "contest_logs"
-HEATMAP_DIR   = Path.home() / "heatmap"
+# contest_utils.py は ~/heatmap/contest_logs/ に置かれる前提で、自分自身の
+# 位置からパスを解決する（フォルダ名が "heatmap" である必要はない）
+BASE_DIR      = Path(__file__).resolve().parent
+HEATMAP_DIR   = BASE_DIR.parent
 
 # ---- 日程計算 -------------------------------------------------------------
 def second_full_weekend(year: int, month: int) -> date:

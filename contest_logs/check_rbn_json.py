@@ -3,7 +3,7 @@
 import json, sys, glob
 from pathlib import Path
 
-data_dir = Path.home() / "heatmap" / "data"
+data_dir = Path(__file__).resolve().parent.parent / "data"
 pattern = str(data_dir / "*_rbn.json")
 files = sorted(glob.glob(pattern))
 

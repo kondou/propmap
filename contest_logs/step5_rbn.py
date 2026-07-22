@@ -79,8 +79,9 @@ def main():
         _out = rbn_json(args.contest, args.year)
     except (ImportError, ValueError) as e:
         cid = f"{args.contest}_{args.year}"
-        _in  = [Path.home()/"heatmap"/"contest_logs"/"csv"/f"{cid}_rbn_pairs.csv"]
-        _out = Path.home()/"heatmap"/"data"/f"{cid}_rbn.json"
+        _script_dir = Path(__file__).resolve().parent
+        _in  = [_script_dir/"csv"/f"{cid}_rbn_pairs.csv"]
+        _out = _script_dir.parent/"data"/f"{cid}_rbn.json"
 
     inputs = [Path(p) for p in args.input] if args.input else _in
     out    = Path(args.output) if args.output else _out

@@ -35,7 +35,7 @@ Useful for planning contest operations, identifying optimal band-change timing, 
 
 ### Placement
 
-Extract the zip (or clone the repository) so that the files sit at `~/heatmap/` (macOS/Linux/WSL2) or `%USERPROFILE%\heatmap\` (Windows, e.g. `C:\Users\YourName\heatmap\`).
+Extract the zip (or clone the repository) wherever you like — the folder name doesn't need to be `heatmap`. The rest of this guide uses `~/heatmap/` (macOS/Linux/WSL2) or `%USERPROFILE%\heatmap\` (Windows, e.g. `C:\Users\YourName\heatmap\`) as an example; substitute your actual location.
 
 ### Launching the Application
 
