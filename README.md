@@ -40,7 +40,7 @@ time of year.
    at `~/heatmap` (macOS/Linux/WSL2) or `%USERPROFILE%\heatmap` (Windows)
 2. Double-click `start_heatmap.command` (macOS) or `start_heatmap.bat`
    (Windows)
-   - macOS, first launch only: right-click → Open to pass Gatekeeper
+   - macOS, first launch only: right-click → Open
    - Windows: unlike macOS, a "Security Warning" dialog saying the publisher
      could not be verified will keep appearing on **every** launch until you
      take action — clicking **Run** each time works, but to make it stop for

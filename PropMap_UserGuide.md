@@ -47,7 +47,7 @@ zip を展開（またはリポジトリを clone）し、`~/heatmap/`（macOS/L
 bash ~/heatmap/start_heatmap.command
 ```
 
-> **macOS の初回のみ:** ダウンロードした zip 由来のファイルは Gatekeeper にブロックされるため、`start_heatmap.command` を右クリック →「開く」で起動する。2回目以降はダブルクリックで起動できる
+> **macOS の初回のみ:** ダウンロードした zip 由来のファイルは初回起動時にブロックされるため、`start_heatmap.command` を右クリック →「開く」で起動する。2回目以降はダブルクリックで起動できる
 
 （Python の場所を自分で管理している場合は `python3 ~/heatmap/propmap_server.py` の直接起動でもよい）
 

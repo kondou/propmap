@@ -39,7 +39,7 @@ Network）スポットデータをもとに、過去の HF 帯伝搬を自局グ
    （Windows）に配置する
 2. `start_heatmap.command`（macOS）または `start_heatmap.bat`（Windows）を
    ダブルクリックする
-   - macOS の初回のみ: 右クリック →「開く」で Gatekeeper を通す
+   - macOS の初回のみ: 右クリック →「開く」で起動する
    - Windows: macOS と異なり、こちらは対処しない限り**毎回**「発行元を
      確認できませんでした」という警告が出る。都度「実行」をクリックしても
      動くが、恒久的に止めたい場合は `start_heatmap.bat` を右クリック →

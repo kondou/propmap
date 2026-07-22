@@ -47,7 +47,7 @@ Double-click `start_heatmap.command`, or run the following in a terminal. When d
 bash ~/heatmap/start_heatmap.command
 ```
 
-> **macOS, first launch only:** files extracted from a downloaded zip are blocked by Gatekeeper. Right-click `start_heatmap.command` → "Open" the first time; afterwards a plain double-click works.
+> **macOS, first launch only:** files extracted from a downloaded zip are blocked on first launch. Right-click `start_heatmap.command` → "Open" the first time; afterwards a plain double-click works.
 
 (If you manage your own Python, launching `python3 ~/heatmap/propmap_server.py` directly is also fine.)
 
