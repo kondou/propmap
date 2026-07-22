@@ -30,7 +30,7 @@ REM Open the browser
 start http://localhost:8765/heatmap.html
 
 echo.
-echo  PropMap server started  (python: %PYTHON%)
+echo  PropMap server started  - python: %PYTHON%
 echo  http://localhost:8765/heatmap.html
 echo  Data update: http://localhost:8765/update.html
 echo.

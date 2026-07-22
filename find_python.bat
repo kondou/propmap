@@ -25,7 +25,7 @@ set "_FOUND="
 if defined PROPMAP_PYTHON (
     %PROPMAP_PYTHON% -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
     if !errorlevel! == 0 ( set "_FOUND=%PROPMAP_PYTHON%" ) else (
-        echo !!! PROPMAP_PYTHON (%PROPMAP_PYTHON%) cannot run as Python 3.10+ 1>&2
+        echo !!! PROPMAP_PYTHON is set to "%PROPMAP_PYTHON%" but cannot run as Python 3.10+ 1>&2
     )
 )
 
@@ -56,7 +56,7 @@ if not defined _FOUND (
     echo No Python 3.10+ was found. 1>&2
     echo PropMap needs Python, but no development environment 1>&2
     echo such as Visual Studio is required. You can install it one of two ways: 1>&2
-    echo   A^) uv (recommended, automatic^): continue below to install it now 1>&2
+    echo   A^) uv - recommended, automatic: continue below to install it now 1>&2
     echo   B^) python.org official installer: https://www.python.org/downloads/ 1>&2
     echo. 1>&2
     set /p _ans="Install uv and continue? [y/N]: "

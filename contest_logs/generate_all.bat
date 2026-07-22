@@ -276,7 +276,7 @@ call :get_ts
 echo !_TS!  [END rc=!_RC!] !_LABEL! >> "%LOG_FILE%"
 
 if !_RC! neq 0 (
-    echo   !!! Error (rc=!_RC!): !_LABEL!
+    echo   !!! Error rc=!_RC!: !_LABEL!
     set /a FAIL+=1
 ) else (
     set /a OK+=1
