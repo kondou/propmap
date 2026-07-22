@@ -61,10 +61,11 @@ bash ~/heatmap/start_heatmap.command
 
 （Python の場所を自分で管理している場合は `python %USERPROFILE%\heatmap\propmap_server.py` の直接起動でもよい）
 
-> **Windows で「発行元を確認できませんでした」という警告が出る場合:** そのまま「実行」をクリックすれば起動する。この警告が毎回出るのを止めたい場合は、`start_heatmap.bat` を右クリック →「プロパティ」→ 下部の「許可する」（ブロックの解除）にチェックを入れて「OK」。他の `.bat` ファイルも含めて展開フォルダ全体をまとめて解除したい場合は、PowerShell で以下を実行する:
+> **Windows で「発行元を確認できませんでした」という警告が出る場合:** そのまま「実行」をクリックすれば起動する。この警告が毎回出るのを止めたい場合は、展開フォルダで PowerShell を開き以下を実行する（他の `.bat` ファイルも含めてまとめて解除される）:
 > ```powershell
 > Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File
 > ```
+> 「プロパティ→ブロックの解除」チェックボックスは環境によって見当たらないことがあるが、上記コマンドはそれによらず有効
 
 起動後、ブラウザで `http://localhost:8765` にアクセスする
 

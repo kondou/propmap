@@ -36,20 +36,40 @@ time of year.
 
 ## Quick start
 
-1. Download the latest release zip (or clone this repository) and place it
-   at `~/heatmap` (macOS/Linux/WSL2) or `%USERPROFILE%\heatmap` (Windows)
+1. Download the [latest release zip](https://github.com/kondou/propmap/releases/latest/download/propmap-latest.zip)
+   (or clone this repository) and place it at `~/heatmap` (macOS/Linux/WSL2)
+   or `%USERPROFILE%\heatmap` (Windows). That link always points to the
+   newest version — bookmark it if you'd like
 2. Double-click `start_heatmap.command` (macOS) or `start_heatmap.bat`
    (Windows)
    - macOS, first launch only: right-click → Open
    - Windows: unlike macOS, a "Security Warning" dialog saying the publisher
      could not be verified will keep appearing on **every** launch until you
-     take action — clicking **Run** each time works, but to make it stop for
-     good, right-click `start_heatmap.bat` → Properties → check **Unblock** →
-     OK (or unblock the whole extracted folder at once with PowerShell:
-     `Get-ChildItem -Recurse | Unblock-File`)
+     take action. Clicking **Run** each time works, but to make it stop for
+     good, open PowerShell in the extracted folder and run:
+     ```powershell
+     Get-ChildItem -Recurse | Unblock-File
+     ```
+     (The Properties → Unblock checkbox some guides mention isn't always
+     present or easy to find; the command above works regardless.)
 3. Your browser opens `http://localhost:8765` automatically
 
 The server binds to 127.0.0.1 only and is not reachable from other machines.
+
+## Updating to a new version
+
+Contest data (`data/`) is **not** part of the release zip, so it is not
+automatically carried over when you install a new version — extracting into
+a fresh folder starts you over with no data. To keep your existing data,
+**extract the new zip directly into your existing `~/heatmap` folder**
+(or `%USERPROFILE%\heatmap` on Windows) and confirm overwrite when asked,
+instead of extracting into a new, differently-named folder (which is what
+your OS's unzip tool will suggest by default). Only the app files get
+overwritten; `data/` isn't touched since it isn't in the zip.
+
+Windows: the newly overwritten files come from a freshly downloaded zip, so
+they carry the internet-zone mark again even if you unblocked the previous
+version — re-run the PowerShell command above after every update.
 
 ## Preparing data
 

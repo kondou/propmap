@@ -155,9 +155,10 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 </code></pre>
 <p>（Python の場所を自分で管理している場合は <code>python %USERPROFILE%\heatmap\propmap_server.py</code> の直接起動でもよい）</p>
 <blockquote>
-<p><strong>Windows で「発行元を確認できませんでした」という警告が出る場合:</strong> そのまま「実行」をクリックすれば起動する。この警告が毎回出るのを止めたい場合は、<code>start_heatmap.bat</code> を右クリック →「プロパティ」→ 下部の「許可する」（ブロックの解除）にチェックを入れて「OK」。他の <code>.bat</code> ファイルも含めて展開フォルダ全体をまとめて解除したい場合は、PowerShell で以下を実行する:
+<p><strong>Windows で「発行元を確認できませんでした」という警告が出る場合:</strong> そのまま「実行」をクリックすれば起動する。この警告が毎回出るのを止めたい場合は、展開フォルダで PowerShell を開き以下を実行する（他の <code>.bat</code> ファイルも含めてまとめて解除される）:
 <code>powershell
-Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File</code></p>
+Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File</code>
+「プロパティ→ブロックの解除」チェックボックスは環境によって見当たらないことがあるが、上記コマンドはそれによらず有効</p>
 </blockquote>
 <p>起動後、ブラウザで <code>http://localhost:8765</code> にアクセスする</p>
 <p>起動スクリプトは利用可能な Python 3.10 以上を自動検出して使用する。見つからない場合はその場で案内が出て、同意すれば <strong>uv</strong> を導入し Python 本体も自動調達するため、<strong>通常は Python の事前インストールは不要</strong>（コンパイラや開発環境も不要）。手動で導入・管理したい場合は「<a href="#参考python-の手動インストール">（参考）Python の手動インストール</a>」を参照</p>

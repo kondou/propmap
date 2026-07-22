@@ -61,10 +61,11 @@ Double-click `start_heatmap.bat`, or run the following in Command Prompt:
 
 (If you manage your own Python, launching `python %USERPROFILE%\heatmap\propmap_server.py` directly is also fine.)
 
-> **If Windows shows a "the publisher could not be verified" warning:** click **Run** to continue. To stop it appearing every time, right-click `start_heatmap.bat` → Properties → check **Unblock** near the bottom → OK. To unblock the whole extracted folder (including the other `.bat` files) at once, run this in PowerShell:
+> **If Windows shows a "the publisher could not be verified" warning:** click **Run** to continue. To stop it appearing every time, open PowerShell in the extracted folder and run this (it unblocks the whole folder, including the other `.bat` files):
 > ```powershell
 > Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File
 > ```
+> The Properties → Unblock checkbox some guides mention isn't always present or easy to find; the command above works regardless.
 
 After launching, open `http://localhost:8765` in your browser.
 

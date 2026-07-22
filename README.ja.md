@@ -34,21 +34,31 @@ Network）スポットデータをもとに、過去の HF 帯伝搬を自局グ
 
 ## クイックスタート
 
-1. 最新リリースの zip をダウンロード（またはこのリポジトリを clone）し、
-   `~/heatmap`（macOS/Linux/WSL2）または `%USERPROFILE%\heatmap`
-   （Windows）に配置する
+1. [最新リリースの zip](https://github.com/kondou/propmap/releases/latest/download/propmap-latest.zip)
+   （常に最新版を指す固定リンク。ブックマーク推奨）をダウンロード
+   （またはこのリポジトリを clone）し、`~/heatmap`（macOS/Linux/WSL2）
+   または `%USERPROFILE%\heatmap`（Windows）に配置する
 2. `start_heatmap.command`（macOS）または `start_heatmap.bat`（Windows）を
    ダブルクリックする
    - macOS の初回のみ: 右クリック →「開く」で起動する
    - Windows: macOS と異なり、こちらは対処しない限り**毎回**「発行元を
      確認できませんでした」という警告が出る。都度「実行」をクリックしても
-     動くが、恒久的に止めたい場合は `start_heatmap.bat` を右クリック →
-     「プロパティ」→「許可する」（ブロックの解除）にチェック → OK
-     （展開したフォルダ全体をまとめて解除したい場合は PowerShell で
-     `Get-ChildItem -Recurse | Unblock-File` を実行）
+     動くが、恒久的に止めたい場合は、展開したフォルダで PowerShell を開き
+     以下を実行する:
+     ```powershell
+     Get-ChildItem -Recurse | Unblock-File
+     ```
+     （一部のガイドにある「プロパティ→ブロックの解除」チェックボックスは
+     環境によって見当たらないことがあるが、上記コマンドはそれによらず有効）
 3. ブラウザが自動的に `http://localhost:8765` を開く
 
 サーバーは 127.0.0.1 のみにバインドされ、他の PC からはアクセスできない。
+
+## 新しいバージョンへの更新
+
+コンテストデータ（`data/`）はリリース zip に**含まれていない**ため、新しいバージョンを入れても自動的には引き継がれない。新規フォルダに展開するとデータが無い状態からやり直しになる。既存のデータを保持するには、**新しい zip を既存の `~/heatmap` フォルダに直接展開**し、上書き確認が出たら上書きする（OSの展開ツールが既定で提案する、バージョン番号付きの新規フォルダには展開しない）。zip に含まれるアプリ本体のファイルだけが上書きされ、zip に含まれない `data/` には触れないため保持される。
+
+Windows:上書きされるファイルは新しくダウンロードした zip 由来のものなので、以前のバージョンで一度ブロック解除していても**改めてインターネットゾーンのマークが付く**。更新のたびに上記の PowerShell コマンドを再実行すること。
 
 ## データの準備
 

@@ -155,9 +155,10 @@ img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radiu
 </code></pre>
 <p>(If you manage your own Python, launching <code>python %USERPROFILE%\heatmap\propmap_server.py</code> directly is also fine.)</p>
 <blockquote>
-<p><strong>If Windows shows a "the publisher could not be verified" warning:</strong> click <strong>Run</strong> to continue. To stop it appearing every time, right-click <code>start_heatmap.bat</code> → Properties → check <strong>Unblock</strong> near the bottom → OK. To unblock the whole extracted folder (including the other <code>.bat</code> files) at once, run this in PowerShell:
+<p><strong>If Windows shows a "the publisher could not be verified" warning:</strong> click <strong>Run</strong> to continue. To stop it appearing every time, open PowerShell in the extracted folder and run this (it unblocks the whole folder, including the other <code>.bat</code> files):
 <code>powershell
-Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File</code></p>
+Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File</code>
+The Properties → Unblock checkbox some guides mention isn't always present or easy to find; the command above works regardless.</p>
 </blockquote>
 <p>After launching, open <code>http://localhost:8765</code> in your browser.</p>
 <p>The launcher auto-detects a usable Python 3.10+. If none is found, it offers guidance on the spot: with your consent, <strong>uv</strong> is installed and fetches a standalone Python binary — so <strong>a prior Python install is normally unnecessary</strong> (no compiler or developer environment either). For manual installs see "<a href="#reference-manual-python-installation">(Reference) Manual Python Installation</a>".</p>
