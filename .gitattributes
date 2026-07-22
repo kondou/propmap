@@ -1,0 +1,9 @@
+.gitignore export-ignore
+.gitattributes export-ignore
+
+# メンテナ専用（構築済みデータのリリース公開用。エンドユーザーには不要）
+make_data_release.py export-ignore
+
+# 開発時のコード変更検証専用（エンドユーザーには不要）
+verify.sh export-ignore
+verify.bat export-ignore
