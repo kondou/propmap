@@ -60,16 +60,24 @@ The server binds to 127.0.0.1 only and is not reachable from other machines.
 ## Updating to a new version
 
 Contest data (`data/`) is **not** part of the release zip, so it is not
-automatically carried over when you install a new version — extracting into
-a fresh folder starts you over with no data. To keep your existing data,
-**extract the new zip directly into your existing PropMap folder**
-(wherever you placed it) and confirm overwrite when asked,
-instead of extracting into a new, differently-named folder (which is what
-your OS's unzip tool will suggest by default). Only the app files get
-overwritten; `data/` isn't touched since it isn't in the zip.
+automatically carried over when you install into a folder you haven't
+used before — that starts you over with no data.
 
-Windows: the newly overwritten files come from a freshly downloaded zip, so
-they carry the internet-zone mark again even if you unblocked the previous
+If you always use the [stable link](https://github.com/kondou/propmap/releases/latest/download/propmap-latest.zip)
+above, this is mostly automatic: its filename never changes, so your OS's
+default "Extract All" will consistently create (or reuse) the same
+`propmap-latest` folder every time. Extracting there again and confirming
+overwrite naturally keeps `data/`, since the zip doesn't contain it and
+so doesn't touch it.
+
+If you downloaded a version-specific zip instead, or moved/renamed your
+install, extract the new zip directly into that same existing folder
+(rather than a new one) and confirm overwrite — the same reasoning
+applies either way: only the app files get overwritten, `data/` is left
+alone.
+
+Windows: overwritten files come from a freshly downloaded zip, so they
+carry the internet-zone mark again even if you unblocked the previous
 version — re-run the PowerShell command above after every update.
 
 ## Preparing data

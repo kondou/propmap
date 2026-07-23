@@ -47,7 +47,7 @@
 </head>
 <body>
 <h1><span data-en="PropMap Data Update">PropMap データ更新</span>
-  <small><a href="./heatmap.html" data-en="← Back to the propagation map">← 伝播マップへ戻る</a><span data-en=" (existing data remains viewable during the update)">（更新中も既存データで表示できます）</span></small>
+  <small><a href="./heatmap.html" id="lnk-back" data-en="← Back to the propagation map">← 伝播マップへ戻る</a><span data-en=" (existing data remains viewable during the update)">（更新中も既存データで表示できます）</span></small>
 </h1>
 
 <div class="panel">
@@ -417,6 +417,17 @@ $('btn-import').onclick = async () => {
     refresh();
   } catch (e) { alert(T('実行を開始できません: ','Could not start the import: ') + e.message); }
 };
+
+// 「戻る」: 元の伝播マップのタブが残っていればそちらに戻ってこのタブを閉じる
+// （同タブ内で遷移すると、地図タブ側が別に残ったままタブが増えてしまうため）。
+// window.opener が無い場合（直接このURLを開いた等）は通常の遷移にフォールバック
+$('lnk-back').addEventListener('click', (e) => {
+  if (window.opener && !window.opener.closed) {
+    e.preventDefault();
+    window.opener.focus();
+    window.close();
+  }
+});
 
 refresh();   // 再訪時に実行中ジョブへ復帰
 </script>
