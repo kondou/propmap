@@ -54,23 +54,19 @@ if not defined _FOUND (
 if not defined _FOUND (
     echo. 1>&2
     echo No Python 3.10+ was found. 1>&2
-    echo PropMap needs Python, but no development environment 1>&2
-    echo such as Visual Studio is required. You can install it one of two ways: 1>&2
-    echo   A^) uv - recommended, automatic: continue below to install it now 1>&2
-    echo   B^) python.org official installer: https://www.python.org/downloads/ 1>&2
-    echo. 1>&2
-    set /p _ans="Install uv and continue? [y/N]: "
+    set /p _ans="Install Python automatically? [y/N]: "
     if /i "!_ans!" == "y" (
         powershell -NoProfile -ExecutionPolicy ByPass -Command "$env:UV_NO_MODIFY_PATH='1'; irm https://astral.sh/uv/install.ps1 | iex"
         set "PATH=%USERPROFILE%\.local\bin;!PATH!"
         where uv >nul 2>&1
         if !errorlevel! == 0 (
             set "_FOUND=uv run --no-project --python 3.12 python"
-            echo uv installed. The first run may take a little longer 1>&2
-            echo while it fetches the Python runtime itself. 1>&2
+            echo Installed. The first run may take a little longer. 1>&2
         ) else (
-            echo !!! Failed to install uv 1>&2
+            echo !!! Install failed. Please install Python manually from https://www.python.org/downloads/ 1>&2
         )
+    ) else (
+        echo To install manually, get it from https://www.python.org/downloads/ 1>&2
     )
 )
 

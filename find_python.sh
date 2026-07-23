@@ -105,39 +105,34 @@ if [ -z "$PYTHON" ]; then
   done
 fi
 
-# 5. Nothing found: guidance (offer to install uv, with consent, if interactive)
+# 5. Nothing found: guidance (offer to install automatically, with consent, if interactive)
 if [ -z "$PYTHON" ]; then
   echo "" >&2
   echo "$(_pm_msg "Python 3.10 以上が見つかりませんでした。" \
                   "No Python 3.10+ was found.")" >&2
-  echo "$(_pm_msg "PropMap の実行には Python が必要ですが、Xcode や Command Line Tools" \
-                  "PropMap needs Python, but no development environment")" >&2
-  echo "$(_pm_msg "などの開発環境は不要です。次のいずれかで導入できます:" \
-                  "such as Xcode or Command Line Tools is required. You can install it one of two ways:")" >&2
-  echo "$(_pm_msg "  A) uv（推奨・自動）: このままインストールを続行できます" \
-                  "  A) uv (recommended, automatic): continue below to install it now")" >&2
-  echo "$(_pm_msg "  B) python.org 公式インストーラ: https://www.python.org/downloads/" \
-                  "  B) python.org official installer: https://www.python.org/downloads/")" >&2
-  echo "" >&2
   if [ -t 0 ]; then
-    printf "%s" "$(_pm_msg "uv をインストールして続行しますか? [y/N]: " \
-                           "Install uv and continue? [y/N]: ")" >&2
+    printf "%s" "$(_pm_msg "Python を自動でインストールしますか? [y/N]: " \
+                           "Install Python automatically? [y/N]: ")" >&2
     read -r _pm_ans
     if [ "$_pm_ans" = "y" ] || [ "$_pm_ans" = "Y" ]; then
       if curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh; then
         export PATH="$HOME/.local/bin:$PATH"
         if command -v uv >/dev/null 2>&1; then
           PYTHON="uv run --no-project --python 3.12 python"
-          echo "$(_pm_msg "uv をインストールしました。初回は Python 本体の取得のため" \
-                          "uv installed. The first run may take a little longer")" >&2
-          echo "$(_pm_msg "起動に少し時間がかかります。" \
-                          "while it fetches the Python runtime itself.")" >&2
+          echo "$(_pm_msg "インストールしました。初回は少し時間がかかります。" \
+                          "Installed. The first run may take a little longer.")" >&2
         fi
       else
-        echo "$(_pm_msg "!!! uv のインストールに失敗しました" \
-                        "!!! Failed to install uv")" >&2
+        echo "$(_pm_msg "!!! インストールに失敗しました。https://www.python.org/downloads/ から手動でインストールしてください。" \
+                        "!!! Install failed. Please install Python manually from https://www.python.org/downloads/")" >&2
       fi
+    else
+      echo "$(_pm_msg "手動でインストールする場合は https://www.python.org/downloads/ から" \
+                      "To install manually, get it from https://www.python.org/downloads/")" >&2
     fi
+  else
+    echo "$(_pm_msg "https://www.python.org/downloads/ から Python をインストールしてください。" \
+                    "Please install Python from https://www.python.org/downloads/")" >&2
   fi
 fi
 
