@@ -420,10 +420,13 @@ $('btn-import').onclick = async () => {
 
 // 「戻る」: 元の伝播マップのタブが残っていればそちらに戻ってこのタブを閉じる
 // （同タブ内で遷移すると、地図タブ側が別に残ったままタブが増えてしまうため）。
+// 取り込んだデータを利用者が意識せず参照できるよう、戻る際に地図タブを
+// リロードしてから前面に出す（手動リロードと同じ状態にする）。
 // window.opener が無い場合（直接このURLを開いた等）は通常の遷移にフォールバック
 $('lnk-back').addEventListener('click', (e) => {
   if (window.opener && !window.opener.closed) {
     e.preventDefault();
+    window.opener.location.reload();
     window.opener.focus();
     window.close();
   }
