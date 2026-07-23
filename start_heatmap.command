@@ -53,5 +53,8 @@ echo "$(_sh_msg "このウィンドウを閉じるとサーバーが停止しま
                 "Close this window to stop the server.")"
 unset -f _sh_msg 2>/dev/null
 unset _sh_L 2>/dev/null
-trap "kill $SERVER_PID 2>/dev/null" INT TERM EXIT
+# $PYTHON may be a wrapper (e.g. "uv run ... python") that spawns the real
+# server as a child process rather than exec-replacing itself; kill any
+# children of SERVER_PID too so the server can't be left orphaned.
+trap "pkill -P $SERVER_PID 2>/dev/null; kill $SERVER_PID 2>/dev/null" INT TERM EXIT
 wait $SERVER_PID
