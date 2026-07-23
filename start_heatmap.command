@@ -1,19 +1,31 @@
 #!/bin/bash
-# このファイルをダブルクリックするとサーバーが起動してブラウザが開きます
+# Double-click this file to start the server and open the browser
 cd "$(dirname "$0")"
 PORT=8765
 
-# 実行に使う Python を解決（開発環境が無くても動くようにする。詳細は find_python.sh）
+# ---- i18n -------------------------------------------------------------------
+if [[ "${LANG:-}" == ja* ]] || [[ "${LC_ALL:-}" == ja* ]] || [[ "${LANGUAGE:-}" == ja* ]]; then
+  _sh_L=ja
+else
+  _sh_L=en
+fi
+_sh_msg() { [[ "$_sh_L" == ja ]] && echo "$1" || echo "$2"; }
+# -----------------------------------------------------------------------------
+
+# Resolve the Python to use (works with no dev environment installed;
+# see find_python.sh for details)
 source ./find_python.sh
 if [ -z "$PYTHON" ]; then
-  echo "Python が見つからないため起動できません。上記の案内に従って導入後、再度実行してください。"
-  read -r -p "Enterで終了します..." _
+  echo "$(_sh_msg "Python が見つからないため起動できません。上記の案内に従って導入後、再度実行してください。" \
+                  "Python was not found, so PropMap cannot start. Follow the guidance above to install it, then run this again.")"
+  read -r -p "$(_sh_msg "Enterで終了します..." "Press Enter to exit...")" _
   exit 1
 fi
 
 lsof -ti:$PORT | xargs kill -9 2>/dev/null
 sleep 0.3
-# 静的配信 + データ更新API（propmap_server.py が無い環境では従来の http.server に自動フォールバック）
+# Static files + data-update API (falls back to the traditional
+# http.server if propmap_server.py is missing)
 if [ -f propmap_server.py ]; then
   $PYTHON propmap_server.py --port $PORT &
 else
@@ -22,8 +34,9 @@ fi
 SERVER_PID=$!
 sleep 0.8
 URL="http://localhost:$PORT/heatmap.html"
-# open: macOS。wslview: WSL2（wslu導入済みの場合、Windows側の既定ブラウザを開く）。
-# xdg-open: 一般的なLinuxデスクトップ。どれも無ければURLを表示するのみ。
+# open: macOS. wslview: WSL2 (opens the Windows-side default browser, if
+# wslu is installed). xdg-open: typical Linux desktop. If none are
+# available, just print the URL.
 if command -v open >/dev/null 2>&1; then
   open "$URL"
 elif command -v wslview >/dev/null 2>&1; then
@@ -31,9 +44,14 @@ elif command -v wslview >/dev/null 2>&1; then
 elif command -v xdg-open >/dev/null 2>&1; then
   xdg-open "$URL" >/dev/null 2>&1
 else
-  echo "ブラウザを自動で開けませんでした。以下のURLを手動で開いてください:"
+  echo "$(_sh_msg "ブラウザを自動で開けませんでした。以下のURLを手動で開いてください:" \
+                  "Could not open a browser automatically. Please open this URL manually:")"
 fi
-echo "Server running at http://localhost:$PORT  (python: $PYTHON)"
-echo "Close this window to stop."
+echo "$(_sh_msg "サーバーが起動しました: http://localhost:$PORT  (python: $PYTHON)" \
+                "Server running at http://localhost:$PORT  (python: $PYTHON)")"
+echo "$(_sh_msg "このウィンドウを閉じるとサーバーが停止します。" \
+                "Close this window to stop the server.")"
+unset -f _sh_msg 2>/dev/null
+unset _sh_L 2>/dev/null
 trap "kill $SERVER_PID 2>/dev/null" INT TERM EXIT
 wait $SERVER_PID
