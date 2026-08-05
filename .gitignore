@@ -34,6 +34,7 @@ contest_logs/README.txt
 contest_logs/regenerate_all_rbn.sh
 contest_logs/generate_all_tmp.sh
 generate_guides.py
+embed_favicons.py
 fetch_qrz.py
 .claude-session
 JA1ABC_dump.html

@@ -7,3 +7,6 @@ make_data_release.py export-ignore
 # 開発時のコード変更検証専用（エンドユーザーには不要）
 verify.sh export-ignore
 verify.bat export-ignore
+
+# アイコン原本（各HTMLへはdata URIで埋め込み済みのため、配布zipには不要）
+icons/** export-ignore
