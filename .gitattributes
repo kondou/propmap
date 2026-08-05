@@ -9,4 +9,6 @@ verify.sh export-ignore
 verify.bat export-ignore
 
 # アイコン原本（各HTMLへはdata URIで埋め込み済みのため、配布zipには不要）
+# icons単体の行はディレクトリエントリ自体の除外用（gitattributesは再帰マッチしない）
+icons export-ignore
 icons/** export-ignore
