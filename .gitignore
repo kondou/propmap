@@ -35,6 +35,8 @@ contest_logs/regenerate_all_rbn.sh
 contest_logs/generate_all_tmp.sh
 generate_guides.py
 embed_favicons.py
+render_test.js
+render_test_sample_status.json
 fetch_qrz.py
 .claude-session
 JA1ABC_dump.html
