@@ -366,6 +366,8 @@ class PropMapHandler(SimpleHTTPRequestHandler):
             return self._send_json({"ok": True, "state": "checking"})
 
         if path == "/api/new-logs/import":
+            body = self._read_json_body()
+            keys = body.get("keys")   # ["cqwpx_cw_2021", ...] 省略時は全対象
             with _lock:
                 if _job["state"] in ("checking", "running"):
                     return self._send_json(
@@ -375,6 +377,13 @@ class PropMapHandler(SimpleHTTPRequestHandler):
                     return self._send_json(
                         {"error": "no check result; run check first"}, 400)
                 targets = list(_job["targets"])
+                if keys is not None:
+                    keyset = set(keys)
+                    targets = [t for t in targets
+                               if f"{t['contest']}_{t['year']}" in keyset]
+                if not targets:
+                    return self._send_json(
+                        {"error": "nothing selected to import"}, 400)
                 _job.update(state="running", started=time.time(),
                             finished=None, steps_total=0, step_index=0,
                             step_label="", results=[], error=None)

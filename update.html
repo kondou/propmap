@@ -87,7 +87,7 @@
 </div>
 
 <div class="panel" id="panel-estimate" style="display:none;">
-  <h2 data-en="3. Disk usage estimate">3. ディスク使用量見積もり</h2>
+  <h2 data-en="3. Select targets and disk usage estimate">3. 対象の選択とディスク使用量見積もり</h2>
   <div id="estimate"></div>
   <div id="diskline"></div>
   <div class="note" data-en="* Public log and JSON sizes are estimates based on existing years. RBN zip sizes are measured via HEAD (except rows marked as estimated). Generating RBN JSON temporarily extracts the zips and requires additional free space.">※ 公開ログ・JSONサイズは既存年の実績からの推定値。
@@ -137,6 +137,10 @@ async function api(path, opts) {
   return j;
 }
 
+// 自前構築の対象選択（構築済みパネルと同じ方式。既定は全選択）
+let nlSelected = new Set();
+let nlRenderedJob = null;
+
 function renderEstimate(st) {
   const est = st.estimate;
   const box = $('estimate');
@@ -144,38 +148,73 @@ function renderEstimate(st) {
     $('panel-estimate').style.display = 'none';
     return;
   }
-  let h = `<table><tr><th>${T('コンテスト','Contest')}</th><th>${T('年','Year')}</th>` +
+  const interactive = st.state === 'ready';
+  const allSelected = est.rows.length > 0 &&
+    est.rows.every(r => nlSelected.has(r.contest + '_' + r.year));
+  const masterCb = interactive
+    ? `<input type="checkbox" id="nl-select-all"${allSelected ? ' checked' : ''}>`
+    : '';
+  let h = `<table><tr><th>${masterCb}</th>` +
+          `<th>${T('コンテスト','Contest')}</th><th>${T('年','Year')}</th>` +
           `<th class="num">${T('局数','Logs')}</th>` +
           `<th class="num">${T('公開ログ','Public logs')}</th><th class="num">RBN zip</th>` +
           `<th class="num">JSON</th><th class="num">${T('小計','Subtotal')}</th></tr>`;
   for (const r of est.rows) {
+    const key = r.contest + '_' + r.year;
+    const cb = interactive
+      ? `<input type="checkbox" data-nlkey="${key}"${nlSelected.has(key) ? ' checked' : ''}>`
+      : (nlSelected.has(key) ? '✓' : '');
     const rbn = r.rbn_bytes == null ? '-'
               : fmtB(r.rbn_bytes) + (r.rbn_exact ? '' : ` <span class="warn">${T('(推定)','(est.)')}</span>`);
-    h += `<tr><td>${r.label}</td><td>${r.year}</td>` +
+    h += `<tr><td>${cb}</td><td>${r.label}</td><td>${r.year}</td>` +
          `<td class="num">${r.logs.toLocaleString()}</td>` +
          `<td class="num">${fmtB(r.logs_bytes)}</td>` +
          `<td class="num">${rbn}</td>` +
          `<td class="num">${fmtB(r.json_bytes)}</td>` +
          `<td class="num">${fmtB(r.subtotal)}</td></tr>`;
   }
-  h += `<tr class="total"><td colspan="6">${T('合計','Total')}</td>` +
-       `<td class="num">${fmtB(est.total)}</td></tr></table>`;
+  const selTotal = est.rows
+    .filter(r => nlSelected.has(r.contest + '_' + r.year))
+    .reduce((s, r) => s + r.subtotal, 0);
+  h += `<tr class="total"><td colspan="7">${T('選択合計','Selected total')}</td>` +
+       `<td class="num">${fmtB(selTotal)}</td></tr></table>`;
   box.innerHTML = h;
 
+  box.querySelectorAll('input[type=checkbox][data-nlkey]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) nlSelected.add(cb.dataset.nlkey);
+      else nlSelected.delete(cb.dataset.nlkey);
+      renderEstimate(st);
+    });
+  });
+  const master = $('nl-select-all');
+  if (master) {
+    master.addEventListener('change', () => {
+      if (master.checked)
+        est.rows.forEach(r => nlSelected.add(r.contest + '_' + r.year));
+      else nlSelected.clear();
+      renderEstimate(st);
+    });
+  }
+
   const dl = $('diskline');
-  if (est.free < est.total) {
-    dl.innerHTML = `<span class="err">${T(
-      `空き容量 ${fmtB(est.free)} が見積もり合計を下回っています。実行できません。`,
-      `Free space ${fmtB(est.free)} is below the estimated total. Cannot proceed.`)}</span>`;
+  if (selTotal === 0) {
+    dl.innerHTML = `<span class="note">${T('対象が選択されていません。',
+      'Nothing is selected.')}</span>`;
     $('btn-import').disabled = true;
-  } else if (est.free < est.total * 2) {
+  } else if (est.free < selTotal) {
+    dl.innerHTML = `<span class="err">${T(
+      `空き容量 ${fmtB(est.free)} が選択合計を下回っています。実行できません。`,
+      `Free space ${fmtB(est.free)} is below the selected total. Cannot proceed.`)}</span>`;
+    $('btn-import').disabled = true;
+  } else if (est.free < selTotal * 2) {
     dl.innerHTML = `${T('空き容量','Free space')}: ${fmtB(est.free)} ` +
                    `<span class="warn">${T('（見積もりの2倍未満。一時展開分に注意）',
                      '(less than 2x the estimate; note the temporary extraction space)')}</span>`;
-    $('btn-import').disabled = false;
+    $('btn-import').disabled = !interactive;
   } else {
     dl.textContent = `${T('空き容量','Free space')}: ${fmtB(est.free)}`;
-    $('btn-import').disabled = false;
+    $('btn-import').disabled = !interactive;
   }
   $('panel-estimate').style.display = '';
 }
@@ -228,6 +267,10 @@ function renderLogsJob(st) {
     $('panel-estimate').style.display = 'none';
   }
   if (st.state === 'ready') {
+    if (nlRenderedJob !== st.started) {
+      nlRenderedJob = st.started;
+      nlSelected = new Set(st.targets.map(t => t.contest + '_' + t.year));
+    }
     renderCheckResult(st);
     renderEstimate(st);
   }
@@ -411,11 +454,15 @@ $('btn-check').onclick = async () => {
 };
 
 $('btn-import').onclick = async () => {
-  if (!confirm(T('見積もり表の内容でダウンロードと取り込みを実行します。よろしいですか?',
-                 'Download and import as shown in the estimate table. Proceed?')))
+  if (!confirm(T('選択した対象のダウンロードと取り込みを実行します。よろしいですか?',
+                 'Download and import the selected targets. Proceed?')))
     return;
   try {
-    await api('/api/new-logs/import', { method: 'POST' });
+    await api('/api/new-logs/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [...nlSelected] })
+    });
     refresh();
   } catch (e) { alert(T('実行を開始できません: ','Could not start the import: ') + e.message); }
 };
