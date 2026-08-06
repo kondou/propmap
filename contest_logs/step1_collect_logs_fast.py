@@ -354,10 +354,10 @@ def collect_year(contest_key: str, year: int, workers: int,
                     print(msg(
                         f"  {i:5d}/{total}  "
                         f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}  "
-                        f"{rate:.1f}件/s  残≈{remain/60:.1f}分",
+                        f"{rate:.1f}件/s  残り約{remain/60:.1f}分",
                         f"  {i:5d}/{total}  "
                         f"new={_cnt['done']} skip={_cnt['skip']} fail={_cnt['fail']}  "
-                        f"{rate:.1f} logs/s  ETA≈{remain/60:.1f}min",
+                        f"{rate:.1f} logs/s  ETA~{remain/60:.1f}min",
                     ))
 
     with _lock:

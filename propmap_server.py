@@ -27,6 +27,7 @@ API:
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -122,9 +123,14 @@ def _check_worker(contests, all_missing):
 
 def _run_step(cmd) -> int:
     """1ステップをサブプロセス実行し、出力をログ末尾バッファへ流す"""
+    # 出力がパイプになるとWindowsではcp932でのエンコードが走り、
+    # cp932に無い文字をprintした時点で子プロセスが落ちる。
+    # 子・親ともUTF-8に固定してこのクラスの障害を防ぐ。
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True,
-                            bufsize=1, cwd=str(SCRIPT_DIR))
+                            encoding="utf-8", errors="replace",
+                            bufsize=1, cwd=str(SCRIPT_DIR), env=env)
     with _lock:
         _job["proc"] = proc
     for line in proc.stdout:

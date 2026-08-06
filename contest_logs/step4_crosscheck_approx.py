@@ -657,7 +657,7 @@ def main():
     if ambiguous_total > 0:
         print(msg(
             f"\n=== バンド訂正 AMBIGUOUS（同数のため訂正スキップ） ===",
-            f"\n=== Band fix AMBIGUOUS (equal support — skipped) ===",
+            f"\n=== Band fix AMBIGUOUS (equal support - skipped) ===",
         ))
         print(msg(f"  件数: {ambiguous_total}", f"  Count: {ambiguous_total}"))
 
