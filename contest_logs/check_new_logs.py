@@ -80,7 +80,8 @@ def http_head_size(url: str, timeout: int = 25) -> int | None:
 
 # ---- 公開ログサイトの確認 ---------------------------------------------------
 
-_CQDIR_LINK_RE = re.compile(r'href="([^"]+\.(?:log|cbr|txt))"', re.IGNORECASE)
+# cqwpx.com/cqww.com は2021年以降のページで href がシングルクォートになったため両対応
+_CQDIR_LINK_RE = re.compile(r'href=["\']([^"\']+\.(?:log|cbr|txt))["\']', re.IGNORECASE)
 _ARRL_LOG_RE   = re.compile(r'showpubliclog\.php', re.IGNORECASE)
 _ARRL_COUNT_RE = re.compile(
     r'Number of logs found[^:]*:\s*([\d,]+)', re.IGNORECASE)
