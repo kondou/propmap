@@ -10,11 +10,20 @@ from pathlib import Path
 
 # ---- i18n ----------------------------------------------------------------
 def _detect_lang():
-    """Detect display language from environment / system locale."""
+    """Detect display language: env vars first, then the OS UI language."""
     for ev in ('LANG', 'LC_ALL', 'LANGUAGE', 'LC_MESSAGES'):
         v = os.environ.get(ev, '')
         if v:
             return 'ja' if v.lower().startswith('ja') else 'en'
+    if sys.platform == 'win32':
+        # 「地域の形式」（locale/レジストリ）ではなくOSの表示言語(UI言語)で
+        # 判定する。表示言語=英語・地域=日本のような構成で誤判定しないため。
+        try:
+            import ctypes
+            lid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            return 'ja' if (lid & 0x3FF) == 0x11 else 'en'
+        except Exception:
+            return 'en'
     try:
         locale.setlocale(locale.LC_ALL, '')
         lc = locale.getlocale()[0] or ''
@@ -22,17 +31,6 @@ def _detect_lang():
             return 'ja'
     except Exception:
         pass
-    if sys.platform == 'win32':
-        try:
-            import winreg
-            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                               r'Control Panel\International')
-            lang = winreg.QueryValueEx(k, 'LocaleName')[0]
-            winreg.CloseKey(k)
-            if lang.startswith('ja'):
-                return 'ja'
-        except Exception:
-            pass
     return 'en'
 
 _LANG = _detect_lang()

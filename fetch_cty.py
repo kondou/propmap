@@ -24,18 +24,19 @@ import locale as _lc, os as _os
 def _dlang():
     for v in [_os.environ.get(e, '') for e in ('LANG', 'LC_ALL', 'LANGUAGE')]:
         if v: return 'ja' if v.lower().startswith('ja') else 'en'
+    if sys.platform == 'win32':
+        # 「地域の形式」ではなくOSの表示言語(UI言語)で判定する
+        try:
+            import ctypes
+            lid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            return 'ja' if (lid & 0x3FF) == 0x11 else 'en'
+        except Exception:
+            return 'en'
     try:
         _lc.setlocale(_lc.LC_ALL, '')
         lc = _lc.getlocale()[0] or ''
         if lc.lower().startswith('ja'): return 'ja'
     except Exception: pass
-    if sys.platform == 'win32':
-        try:
-            import winreg as _wr
-            k = _wr.OpenKey(_wr.HKEY_CURRENT_USER, r'Control Panel\International')
-            l = _wr.QueryValueEx(k, 'LocaleName')[0]; _wr.CloseKey(k)
-            if l.startswith('ja'): return 'ja'
-        except Exception: pass
     return 'en'
 _L = _dlang()
 def msg(ja, en=''): return ja if _L == 'ja' else (en or ja)
