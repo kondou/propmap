@@ -462,6 +462,40 @@ def pipeline_steps(contest: str, year: int) -> list:
     return [(label, [str(c) for c in cmd]) for label, cmd in steps]
 
 
+def cty_step():
+    """
+    fetch_cty の事前ステップ（generate_all と同じく、パイプライン群の前に
+    1回だけ実行する。fetch_cty.py 自体が取得済みスキップを持つ）。
+    戻り値: (label, [cmd, ...])
+    """
+    py = sys.executable or "python3"
+    return ("fetch_cty", [py, str(HEATMAP_DIR / "fetch_cty.py")])
+
+
+def cty_data_present() -> bool:
+    """lookup_cty が使える cty_data/cty-NNNN/ が存在するか"""
+    return any((HEATMAP_DIR / "cty_data").glob("cty-[0-9]*"))
+
+
+def ensure_cty_data() -> bool:
+    """
+    CLI用: cty_data を取得する。取得失敗でも既存データがあれば警告して
+    続行（オフラインでの再実行を止めないため）。データが無く取得も
+    失敗した場合のみ False（後続の step4 系が全滅するため中断する）。
+    """
+    label, cmd = cty_step()
+    if run_cmd(cmd, label):
+        return True
+    if cty_data_present():
+        print(msg("警告: cty.dat の更新確認に失敗（既存の cty_data で続行）",
+                  "Warning: cty.dat update check failed "
+                  "(continuing with the existing cty_data)"))
+        return True
+    print(msg("エラー: cty_data が無く、取得にも失敗しました。中断します。",
+              "Error: cty_data is missing and could not be fetched. Aborting."))
+    return False
+
+
 def run_pipeline(contest: str, year: int) -> bool:
     """CLI用: pipeline_steps を順次実行。前段失敗時は後段を実行しない"""
     for label, cmd in pipeline_steps(contest, year):
@@ -569,6 +603,9 @@ def main():
             return
 
     # ---- 実行 ----
+    if not ensure_cty_data():
+        sys.exit(1)
+
     ok_list, fail_list = [], []
     for t in targets:
         contest, year = t["contest"], t["year"]

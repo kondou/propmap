@@ -158,12 +158,35 @@ def _import_worker(targets):
         for t in targets:
             for label, cmd in cnl.pipeline_steps(t["contest"], t["year"]):
                 all_steps.append((t, label, cmd))
+        steps_total = len(all_steps) + 1   # +1 = 先頭の fetch_cty
         with _lock:
-            _job["steps_total"] = len(all_steps)
+            _job["steps_total"] = steps_total
+
+        # cty_data の事前取得（generate_all と同じく最初に1回。
+        # 取得失敗でも既存データがあれば警告して続行、無ければ中断）
+        cty_label, cty_cmd = cnl.cty_step()
+        with _lock:
+            _job["step_index"] = 1
+            _job["step_label"] = cty_label
+        _log_line(f"==== [1/{steps_total}] {cty_label} ====")
+        if _run_step(cty_cmd) != 0:
+            if cnl.cty_data_present():
+                _log_line(msg(
+                    "警告: cty.dat の更新確認に失敗（既存の cty_data で続行）",
+                    "Warning: cty.dat update check failed "
+                    "(continuing with the existing cty_data)"))
+            else:
+                with _lock:
+                    _job["state"] = "error"
+                    _job["error"] = msg(
+                        "cty_data が無く、取得にも失敗しました",
+                        "cty_data is missing and could not be fetched")
+                    _job["finished"] = time.time()
+                return
 
         failed_contest_year = set()
         results = {}
-        for i, (t, label, cmd) in enumerate(all_steps, 1):
+        for i, (t, label, cmd) in enumerate(all_steps, 2):
             key = (t["contest"], t["year"])
             if key in failed_contest_year:
                 continue   # 前段失敗のcontest/yearは後段を実行しない
@@ -174,7 +197,7 @@ def _import_worker(targets):
                 _log_line(msg(f"  [スキップ] {label}", f"  [SKIP] {label}"))
                 results.setdefault(key, True)
                 continue
-            _log_line(f"==== [{i}/{len(all_steps)}] {label} ====")
+            _log_line(f"==== [{i}/{steps_total}] {label} ====")
             rc = _run_step(cmd)
             if rc != 0:
                 _log_line(msg(f"!!! エラー (rc={rc}): {label}",
