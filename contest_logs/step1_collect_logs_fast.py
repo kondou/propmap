@@ -21,6 +21,8 @@ step1_collect_logs_fast.py  ―  全コンテスト・全年対応 並列ダウ�
   cqww_ssb   CQ WW DX SSB (2005-2025)
   cqwpx_cw   CQ WPX CW    (2008-2025)
   cqwpx_ssb  CQ WPX SSB   (2008-2025)
+  waedc_cw   WAE DX CW    (2017-)   ※順位表経由・1局ずつ取得
+  waedc_ssb  WAE DX SSB   (2017-)   ※順位表経由・1局ずつ取得
 
 所要時間目安 (workers=6):
   IARU    : 約4,000件 → 約12分
@@ -31,8 +33,8 @@ step1_collect_logs_fast.py  ―  全コンテスト・全年対応 並列ダウ�
   ~/contest_logs/raw/{contest_key}_{year}/  ← 年ごとにディレクトリを分ける
 """
 
-import re, time, argparse, sys
-import urllib.request, urllib.error
+import re, time, argparse, sys, html
+import urllib.request, urllib.error, urllib.parse
 from pathlib import Path
 from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -80,6 +82,9 @@ _STATIC_YEARS = {
     "cqww_ssb":  list(range(2005, 2026)),
     "cqwpx_cw":  list(range(2008, 2026)),
     "cqwpx_ssb": list(range(2008, 2026)),
+    # Open Log が遡れるのは2017年から（順位表自体は2014年からある）
+    "waedc_cw":  list(range(2017, 2026)),
+    "waedc_ssb": list(range(2017, 2026)),
 }
 
 def contest_years(contest_key: str) -> list:
@@ -123,11 +128,11 @@ def resolve_iaru_iid(year: int) -> str | None:
     _iaru_resolved = True
 
     seed_url = IARU_YEAR_URLS[max(IARU_YEAR_URLS)]
-    html = fetch(seed_url)
-    if not html:
+    seed_html = fetch(seed_url)
+    if not seed_html:
         return None
     found = 0
-    for iid, y in _IARU_YEAR_LINK_RE.findall(html):
+    for iid, y in _IARU_YEAR_LINK_RE.findall(seed_html):
         y = int(y)
         if y not in IARU_YEAR_URLS:
             IARU_YEAR_URLS[y] = \
@@ -153,6 +158,61 @@ SSN_TABLE = {
                   2015:65,2016:40,2017:25,2018:18,2019:10,2020:10,2021:22,
                   2022:80,2023:140,2024:170,2025:148},
 }
+
+# ---- WAEDC (DARC dxhf2) ----------------------------------------------------
+# WAEDCには公開ログのディレクトリが存在しない。年ごとの順位表から参加局の
+# コールサインを得て、1局ずつ Open Log の CGI を叩く必要がある。
+# 注意: user.cgi に form= を渡すと約45KBのメニューHTMLが付いてくる。渡さなければ
+# 省かれ、<pre> 内のCabrillo本文はバイト単位で同一（2.3万件で約1GBの差）。
+WAEDC_DEFS = {
+    "waedc_cw":  {"host": "waecwlog",  "contest": "waecw"},
+    "waedc_ssb": {"host": "waessblog", "contest": "waessb"},
+}
+_WAEDC_ROW_RE  = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S | re.I)
+_WAEDC_CELL_RE = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.S | re.I)
+_WAEDC_PRE_RE  = re.compile(r"<pre[^>]*>(.*?)</pre>", re.S | re.I)
+_WAEDC_TAG_RE  = re.compile(r"<[^>]+>")
+_WAEDC_TH_RE   = re.compile(r"<th[\s>]", re.I)
+_WAEDC_CALL_RE = re.compile(r"^[A-Z0-9/]{3,}$")
+
+def waedc_list_url(contest_key: str, year: int) -> str:
+    host = WAEDC_DEFS[contest_key]["host"]
+    q = urllib.parse.urlencode({"year": year, "type": "EU/NonEU",
+                                "form": "referat", "Los/Go": "Los/Go"})
+    return f"https://dxhf2.darc.de/~{host}/arch_res.cgi?{q}"
+
+def waedc_log_url(contest_key: str, year: int, call: str) -> str:
+    d = WAEDC_DEFS[contest_key]
+    q = urllib.parse.urlencode({"call": call, "fc": "req_olog",
+                                "contest": d["contest"], "edition": "2000",
+                                "lang": "en", "status": "show", "jahr": year})
+    return f"https://dxhf2.darc.de/~{d['host']}/user.cgi?{q}"
+
+def waedc_calls_from_results(html_text: str) -> list:
+    """順位表HTMLの2列目からコールサインを拾う（重複は除く）。"""
+    calls, seen = [], set()
+    for row in _WAEDC_ROW_RE.findall(html_text):
+        # 見出し行を除く。除かないと "Callsign" が大文字化されてコールサインの
+        # パターンに一致してしまう
+        if _WAEDC_TH_RE.search(row):
+            continue
+        cells = _WAEDC_CELL_RE.findall(row)
+        if len(cells) < 3:
+            continue
+        v = html.unescape(_WAEDC_TAG_RE.sub("", cells[1])).strip().upper()
+        if _WAEDC_CALL_RE.match(v) and v not in seen:
+            seen.add(v)
+            calls.append(v)
+    return calls
+
+def waedc_extract_cabrillo(page: str) -> str | None:
+    """Open Logページの <pre> からCabrillo本文を取り出す。"""
+    m = _WAEDC_PRE_RE.search(page)
+    if not m:
+        return None
+    text = html.unescape(_WAEDC_TAG_RE.sub("", m.group(1))).lstrip("\r\n")
+    return text if "START-OF-LOG" in text else None
+
 
 CONTEST_DEFS = {
     "iaru": {
@@ -184,6 +244,22 @@ CONTEST_DEFS = {
         "get_list_url": lambda y: f"https://cqwpx.com/publiclogs/{y}ph/",
         "base_url": "https://cqwpx.com",
         "log_type": "cqdir",
+    },
+    # 相手は動的CGIの1台構成なので、既定の並列数では負荷をかけすぎる。
+    # max_workers で上限を絞る（1リクエスト1.5〜2.0秒かかる）。
+    "waedc_cw": {
+        "years": lambda: contest_years("waedc_cw"),
+        "get_list_url": lambda y: waedc_list_url("waedc_cw", y),
+        "base_url": "https://dxhf2.darc.de",
+        "log_type": "waedc",
+        "max_workers": 3,
+    },
+    "waedc_ssb": {
+        "years": lambda: contest_years("waedc_ssb"),
+        "get_list_url": lambda y: waedc_list_url("waedc_ssb", y),
+        "base_url": "https://dxhf2.darc.de",
+        "log_type": "waedc",
+        "max_workers": 3,
     },
 }
 
@@ -262,6 +338,11 @@ def expected_path_from_url(url: str, save_dir: Path, log_type: str) -> Path | No
     CALLSIGNヘッダと不一致の稀なケースは推定パスが存在せず再取得されるだけで安全。
     arrl型はURLにコールサインを含まないため推定不可（Noneを返す）。
     """
+    if log_type == "waedc":
+        # waedc型はURLのcallパラメータがそのままコールサイン
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        call = (qs.get("call") or [""])[0].strip().upper()
+        return save_dir / f"{safe_filename(call)}.txt" if call else None
     if log_type != "cqdir":
         return None
     stem = url.rstrip("/").rsplit("/", 1)[-1]
@@ -283,6 +364,14 @@ def download_one(url: str, save_dir: Path, resume: bool,
     if not content:
         with _lock: _cnt["fail"] += 1
         return "fail"
+
+    if log_type == "waedc":
+        # HTMLページの <pre> からCabrillo本文を取り出す。順位表に載っていても
+        # Open Logが出ない局はここでNoneになる（チェックログ等）。
+        content = waedc_extract_cabrillo(content)
+        if not content:
+            with _lock: _cnt["fail"] += 1
+            return "fail"
 
     call = extract_callsign(content)
     if not call:
@@ -316,15 +405,20 @@ def collect_year(contest_key: str, year: int, workers: int,
     save_dir = BASE_SAVE / f"{contest_key}_{year}"
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    html = fetch(list_url)
-    if not html:
+    list_html = fetch(list_url)
+    if not list_html:
         print(msg(f"  [{contest_key}/{year}] 一覧取得失敗: {list_url}",
                   f"  [{contest_key}/{year}] Failed to fetch list: {list_url}"))
         return 0
 
-    parser = LogListParser(defn["base_url"], defn["log_type"], list_url)
-    parser.feed(html)
-    urls = parser.urls
+    if defn["log_type"] == "waedc":
+        # 順位表から参加局を得て、1局ずつのOpen Log URLに展開する
+        calls = waedc_calls_from_results(list_html)
+        urls = [waedc_log_url(contest_key, year, c) for c in calls]
+    else:
+        parser = LogListParser(defn["base_url"], defn["log_type"], list_url)
+        parser.feed(list_html)
+        urls = parser.urls
 
     if not urls:
         print(msg(f"  [{contest_key}/{year}] ログURL 0件 → {list_url}",
@@ -335,6 +429,12 @@ def collect_year(contest_key: str, year: int, workers: int,
         urls = urls[:max_logs]
 
     total = len(urls)
+    # 相手サーバーの性質上、コンテストごとに並列数の上限を設けている場合がある
+    cap = defn.get("max_workers")
+    if cap and workers > cap:
+        print(msg(f"  並列数を {workers} → {cap} に制限（配信元の負荷対策）",
+                  f"  Limiting workers {workers} -> {cap} (to spare the source server)"))
+        workers = cap
     print(msg(f"\n[{contest_key} / {year}]  {total} 件  → {save_dir}",
               f"\n[{contest_key} / {year}]  {total} logs  → {save_dir}"))
 

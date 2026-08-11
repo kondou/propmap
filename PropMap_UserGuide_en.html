@@ -505,10 +505,31 @@ Radius: 20,000km
 <td>48h</td>
 <td>No</td>
 </tr>
+<tr>
+<td>WAE DX CW</td>
+<td>Second full weekend of August (starts Sat 00Z)</td>
+<td>48h</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>WAE DX SSB</td>
+<td>Second full weekend of September (starts Sat 00Z)</td>
+<td>48h</td>
+<td>No</td>
+</tr>
 </tbody>
 </table>
+<h3 id="reading-the-wae-dx-contest">Reading the WAE DX Contest</h3>
+<p>In the WAE DX Contest, <strong>a contact is only valid between a European station and a non-European station</strong>. European stations do not work each other, and neither do stations outside Europe.</p>
+<p>This makes the display behave differently from the other contests:</p>
+<ul>
+<li>Centred on Japan, <strong>only the direction of Europe is shown</strong>. North America, Oceania and Asia are blank.</li>
+<li>Centred on Europe, every direction outside Europe is shown, and only Europe itself is blank.</li>
+</ul>
+<p><strong>A blank area does not mean signals failed to get through.</strong> Those contacts simply never take place, so there is no data. Keep this in mind when comparing propagation between contests.</p>
+<p>The RBN heatmap is matched to the same division and shows only paths between Europe and non-Europe, so that it reads consistently with the QSO heatmap. No such restriction is applied to the other contests.</p>
 <h3 id="about-rbn-data">About RBN Data</h3>
-<p>RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW).</p>
+<p>RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW, WAE DX CW).</p>
 <h3 id="about-ssn-sunspot-number">About SSN (Sunspot Number)</h3>
 <p><code>SN_m_tot_V2.0.txt</code> (monthly sunspot number data provided by SILSO) is used to automatically resolve the SSN for the contest month and apply it during data processing (planned — not yet implemented). If the file does not exist, <code>fetch_ssn.py</code> automatically downloads it when <code>generate_all.sh</code> (or <code>.bat</code>) is run.</p>
 <hr />

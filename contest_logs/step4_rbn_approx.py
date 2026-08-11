@@ -175,17 +175,23 @@ def main():
     args = ap.parse_args()
 
     _resolve_ssn = None
+    _make_region_filter = None
+    _region_split = None
     try:
         sys.path.insert(0, str(Path(__file__).parent))
         from contest_utils import (validate_contest, get_contest_dates, rbn_raw_zips,
                                    spotted_grids_approx_csv, rbn_pairs_approx_csv,
-                                   CONTEST_CFG, resolve_ssn as _resolve_ssn)
+                                   CONTEST_CFG, make_region_filter as _make_region_filter,
+                                   resolve_ssn as _resolve_ssn)
         validate_contest(args.contest)
         cfg = CONTEST_CFG[args.contest]
         if not cfg["has_rbn"]:
             print(msg(f"情報: {args.contest} はRBNデータなし（SSBコンテスト）。スキップします。",
                       f"Info: {args.contest} has no RBN data (SSB contest). Skipping."))
             return
+        # 規約上ヨーロッパ⇔非ヨーロッパしか成立しないコンテスト（WAEDC）では、
+        # RBNも同じ区分に絞らないとQSO層と食い違う
+        _region_split = cfg.get("region_split")
         _start, _end   = get_contest_dates(args.contest, args.year)
         _rbn_csvs      = rbn_raw_zips(args.contest, args.year)
         _log_grids     = [spotted_grids_approx_csv(args.contest, args.year)]
@@ -260,6 +266,12 @@ def main():
         print(msg(f"  警告: cty.dat読み込み失敗 - spotter fallbackなし ({e})",
                   f"  Warning: cty.dat load failed - no spotter fallback ({e})"))
 
+    region_ok = (_make_region_filter(_region_split, cty)
+                 if _make_region_filter else (lambda a, b: True))
+    if _region_split:
+        print(msg(f"  経路フィルタ: {_region_split}（規約上成立しない経路を除外）",
+                  f"  Region filter: {_region_split} (drop paths the rules forbid)"))
+
     print(msg("\napproxグリッドDB読み込み:", "\nLoading approx grid DB:"))
     spotted_grids = {}
     spotted_powers = {}
@@ -280,7 +292,8 @@ def main():
     agg = defaultdict(set)
     total_rows = 0
     skipped = {"period": 0, "mode": 0, "snr": 0, "wpm": 0,
-               "no_spotter_grid": 0, "no_spotted_grid": 0, "not_cty": 0, "band": 0}
+               "no_spotter_grid": 0, "no_spotted_grid": 0, "not_cty": 0, "band": 0,
+               "region": 0}
     spotter_cty_ok  = 0
     unknown_spotters = Counter()
     unknown_spotted  = Counter()
@@ -404,6 +417,12 @@ def main():
                     unknown_spotted[dx_base or dx_raw] += 1
                     continue
 
+                # 規約上ありえない経路を落とす（WAEDC等）。判定はコールサインから
+                # cty.dat の大陸コードを引いて行う（スキマー側は -# 等を除いた基本形）
+                if not region_ok(spotter_base, dx_raw):
+                    skipped["region"] += 1
+                    continue
+
                 dx_key = dx_raw if dx_raw in cty_calls else dx_base
                 if dx_key not in cty_calls:
                     skipped["not_cty"] += 1
@@ -432,6 +451,9 @@ def main():
               f"  WPM out of range:          {skipped['wpm']:8d}"))
     print(msg(f"  バンド不明:                {skipped['band']:8d}",
               f"  Unknown band:              {skipped['band']:8d}"))
+    if _region_split:
+        print(msg(f"  規約外の経路:              {skipped['region']:8d}",
+                  f"  Paths excluded by rules:   {skipped['region']:8d}"))
     print(msg(f"  spotter grids不明:         {skipped['no_spotter_grid']:8d}",
               f"  Unknown spotter grids:     {skipped['no_spotter_grid']:8d}"))
     print(msg(f"  spotter cty.dat解決:       {spotter_cty_ok:8d}",

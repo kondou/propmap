@@ -94,6 +94,32 @@ CONTEST_CFG = {
         "has_rbn":    False,
         "first_year": 2008,
     },
+    # WAEDC は公開ログの取得経路が他と異なる（順位表から参加局を得て1局ずつ
+    # 取得する）。first_year はOpen Logが遡れる年で、順位表自体は2014年からある。
+    # region_split: 規約上ヨーロッパ⇔非ヨーロッパの交信しか成立しないため、
+    # RBN側も同じ区分に絞らないとQSO層と食い違う（詳細は region_split_test）。
+    "waedc_cw": {
+        "label":        "WAE DX CW",
+        "mode":         "CW",
+        "start_hour":   0,
+        "hours":        48,
+        "schedule":     "second_full_weekend",
+        "month":        8,
+        "has_rbn":      True,
+        "first_year":   2017,
+        "region_split": "wae_eu",
+    },
+    "waedc_ssb": {
+        "label":        "WAE DX SSB",
+        "mode":         "SSB",
+        "start_hour":   0,
+        "hours":        48,
+        "schedule":     "second_full_weekend",
+        "month":        9,
+        "has_rbn":      False,
+        "first_year":   2017,
+        "region_split": "wae_eu",
+    },
 }
 
 # contest_utils.py は ~/heatmap/contest_logs/ に置かれる前提で、自分自身の
@@ -216,6 +242,52 @@ def qso_json(contest: str, year: int) -> Path:
 
 def rbn_json(contest: str, year: int) -> Path:
     return HEATMAP_DIR / "data" / f"{contest}_{year}_rbn.json"
+
+def region_split_pair_ok(split, cont_a: str, cont_b: str) -> bool:
+    """
+    region_split を持つコンテストで、その大陸間の経路を採用してよいかを返す。
+
+    WAEDC は規約上「ヨーロッパの局と非ヨーロッパの局の間」でしか交信が成立しない
+    （A contest QSO can only be conducted between a European (ref. WAE list) and
+    a non-European station (ref. DXCC list)）。QSO層は規約により自動的にそうなるが、
+    RBN層はスキマーが相手を選ばないため、絞らないと域内経路が大量に混ざり、
+    同じデータセットの中でQSO層とRBN層が別物になる。
+
+    大陸コードは cty.dat 由来のものを渡すこと。cty.dat は WAEリスト固有の
+    エンティティ（*IT9 シチリア, *TA1 欧州領トルコ 等）を独立に持っているので、
+    WAEの言う「ヨーロッパ」と一致する。
+    """
+    if not split:
+        return True
+    if split == "wae_eu":
+        return (cont_a == "EU") != (cont_b == "EU")
+    raise ValueError(f"unknown region_split: {split}")
+
+
+def make_region_filter(split, cty):
+    """
+    region_split に対応する「この2局間の経路を採用してよいか」を返す関数を作る。
+
+    split が未設定なら常に True（フィルタなし）。cty（lookup_cty.CtyLookup）が
+    None のときも、判定できないので全て通す＝従来動作のままにする。
+    大陸コードの解決はコールサイン単位でキャッシュする（RBNは数百万行あるため）。
+    """
+    if not split or cty is None:
+        return lambda call_a, call_b: True
+    cache = {}
+    def _cont(call):
+        c = cache.get(call)
+        if c is None:
+            try:
+                c = cty.lookup_info(call).continent or "?"
+            except Exception:
+                c = "?"
+            cache[call] = c
+        return c
+    def _ok(call_a, call_b):
+        return region_split_pair_ok(split, _cont(call_a), _cont(call_b))
+    return _ok
+
 
 def validate_contest(contest: str):
     if contest not in CONTEST_CFG:

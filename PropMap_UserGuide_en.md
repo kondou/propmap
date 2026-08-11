@@ -401,10 +401,25 @@ Use **Crawl Timer** to set how long each band is displayed (5s / 10s / 15s).
 | CQ WW SSB | Last full weekend of October (starts Sat 00Z) | 48h | No |
 | CQ WPX CW | Last full weekend of May (starts Sat 00Z) | 48h | Yes |
 | CQ WPX SSB | Last full weekend of March (starts Sat 00Z) | 48h | No |
+| WAE DX CW | Second full weekend of August (starts Sat 00Z) | 48h | Yes |
+| WAE DX SSB | Second full weekend of September (starts Sat 00Z) | 48h | No |
+
+### Reading the WAE DX Contest
+
+In the WAE DX Contest, **a contact is only valid between a European station and a non-European station**. European stations do not work each other, and neither do stations outside Europe.
+
+This makes the display behave differently from the other contests:
+
+- Centred on Japan, **only the direction of Europe is shown**. North America, Oceania and Asia are blank.
+- Centred on Europe, every direction outside Europe is shown, and only Europe itself is blank.
+
+**A blank area does not mean signals failed to get through.** Those contacts simply never take place, so there is no data. Keep this in mind when comparing propagation between contests.
+
+The RBN heatmap is matched to the same division and shows only paths between Europe and non-Europe, so that it reads consistently with the QSO heatmap. No such restriction is applied to the other contests.
 
 ### About RBN Data
 
-RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW).
+RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW, WAE DX CW).
 
 ### About SSN (Sunspot Number)
 

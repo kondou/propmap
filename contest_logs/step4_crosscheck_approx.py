@@ -68,9 +68,17 @@ QSO_PARSE_RE = re.compile(
 )
 
 _STROKE_RE = re.compile(r'^(.+)/(?:QRP|MM|AM|P|M|\d)$', re.IGNORECASE)
+# 入力文字列だけで結果が決まる純粋関数だが、同じコールに対して何度も呼ばれる
+# （1コンテスト年で1億回規模）。結果を覚えておく。
+_NORM_CACHE = {}
 def normalize_call(cs):
+    hit = _NORM_CACHE.get(cs)
+    if hit is not None:
+        return hit
     m = _STROKE_RE.match(cs.upper().strip())
-    return m.group(1) if m else cs.upper().strip()
+    r = m.group(1) if m else cs.upper().strip()
+    _NORM_CACHE[cs] = r
+    return r
 
 def levenshtein(a, b):
     if a == b: return 0
@@ -175,14 +183,11 @@ def try_match(call_a, qso_a, data_b, time_tol_min,
               band_override_a=None, band_override_b=None):
     call_a_norm = normalize_call(call_a)
     band_a = band_override_a or qso_a["band"]
-    for qso_b in data_b["qsos"]:
-        peer_b = qso_b["peer_call"]
-        if peer_b != call_a:
-            if normalize_call(peer_b) != call_a_norm:
-                continue
-            stroke_b = True
-        else:
-            stroke_b = False
+    # 候補は「相手コールの正規化結果が call_a のそれと一致するQSO」だけ。
+    # peer_b == call_a なら正規化結果も必ず一致するので、この索引は従来の
+    # 全件走査と同じ集合を、同じ並び順で与える（従って返る最初の一致も同じ）。
+    for qso_b in data_b["peer_idx"].get(call_a_norm, ()):
+        stroke_b = (qso_b["peer_call"] != call_a)
         band_b = band_override_b or qso_b["band"]
         if band_b != band_a: continue
         if qso_b["mode"] != qso_a["mode"]: continue
@@ -329,6 +334,13 @@ def main():
         print(msg("cty.dat由来グリッドなし → マッチングをスキップ",
                   "No cty.dat-derived grids → skipping matching"))
 
+    # try_match 用の索引をログごとに1回だけ構築する（元の並び順を保つこと）。
+    for _data in logs.values():
+        _idx = {}
+        for _qso in _data["qsos"]:
+            _idx.setdefault(normalize_call(_qso["peer_call"]), []).append(_qso)
+        _data["peer_idx"] = _idx
+
     call_norm_to_raw = {}
     for raw_call in logs:
         norm = normalize_call(raw_call)
@@ -336,7 +348,17 @@ def main():
 
     known_calls = list(logs.keys())
 
+    # 同じ相手コールは何度も現れる（1局のログに出た相手は、その相手と交信した
+    # 他の局のログにも出る）。返り値を決めるのは peer_call だけで、known_calls は
+    # ここより前で確定して以後変化せず、max_dist も定数なので、一度求めた結果を
+    # 覚えておけば再計算は不要。cqwpx_cw 2008 では呼び出し443,051回に対して
+    # 異なるコールは約31,600種類しかなく、約14倍の重複計算になっていた。
+    _fuzzy_cache = {}
+
     def find_fuzzy_candidates(peer_call, max_dist):
+        cached = _fuzzy_cache.get(peer_call)
+        if cached is not None:
+            return cached
         results = []
         peer_len = len(peer_call)
         for kc in known_calls:
@@ -345,6 +367,7 @@ def main():
             if 1 <= d <= max_dist:
                 results.append((d, kc))
         results.sort()
+        _fuzzy_cache[peer_call] = results
         return results
 
     pairs     = []

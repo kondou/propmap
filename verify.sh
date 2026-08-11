@@ -99,11 +99,11 @@ fi
 
 # ---- D2: contest_utils --list の妥当性 -----------------------------------------
 $PYTHON contest_logs/contest_utils.py --list >"$TMPD/l" 2>&1
-if [ "$(awk '{print $1}' "$TMPD/l" | sort -u | wc -l)" -eq 5 ] \
+if [ "$(awk '{print $1}' "$TMPD/l" | sort -u | wc -l)" -eq 7 ] \
    && grep -q "^iaru .* 1$" "$TMPD/l" \
    && grep -q "^cqww_ssb .* 0$" "$TMPD/l" \
    && ! awk -v y="$(date +%Y)" '$2 > y {found=1} END {exit !found}' "$TMPD/l"; then
-  ok "D2 contest_utils --list (5 contests, has_rbn flags, no future years)"
+  ok "D2 contest_utils --list (7 contests, has_rbn flags, no future years)"
 else
   ng "D2 contest_utils --list" "$(head -3 "$TMPD/l")"
 fi

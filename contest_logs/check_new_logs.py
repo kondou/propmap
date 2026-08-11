@@ -129,6 +129,17 @@ def probe_public_logs(contest: str, year: int) -> int | None:
         n = len(_ARRL_LOG_RE.findall(html))
         return n if n > 0 else None
 
+    if contest.startswith("waedc_"):
+        # WAEDCには公開ログの一覧ページが無い。順位表が出ていれば Open Log も
+        # 引けるので、その年の順位表に参加局が載っているかで判定する。
+        from step1_collect_logs_fast import (waedc_list_url,
+                                             waedc_calls_from_results)
+        html = http_get(waedc_list_url(contest, year))
+        if not html:
+            return None
+        n = len(waedc_calls_from_results(html))
+        return n if n > 0 else None
+
     # cqdir 型 (cqww / cqwpx)
     html = http_get(cqdir_list_url(contest, year))
     if not html:

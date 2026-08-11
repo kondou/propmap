@@ -7,8 +7,13 @@ cty.dat群からコールサイン→グリッドロケータを引くモジュ�
     cty = CtyLookup()
     grid, src = cty.lookup('JA1ABC')      # -> ('PM95', 'area')
     grid, src = cty.lookup('3B8/SM6GOR')  # -> ('LG89', 'entity')
-    grid, src = cty.lookup('W3ABC/7')     # -> ('DN31', 'area')
+    grid, src = cty.lookup('W3ABC/7')     # -> ('DN11', 'area')
     grid, src = cty.lookup('JA1FFO/MM')   # -> (None, 'no-locator')
+
+    # エンティティ名・大陸コードも要るとき（EU/非EU判定など）
+    info = cty.lookup_info('IT9GSF')
+    # -> CtyInfo(grid='JM77', source='prefix', entity='Sicily',
+    #            continent='EU', prefix='*IT9')
 
 使い方（単体実行）:
     python3 lookup_cty.py JA1ABC 3B8/SM6GOR W3ABC/7
@@ -26,6 +31,7 @@ grid_source 戻り値:
 """
 
 import re, sys
+from collections import namedtuple
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -74,12 +80,21 @@ def latlon_to_grid4(lat, lon_east):
 # パース補助
 # ---------------------------------------------------------------------------
 # エンティティヘッダー行のパターン
+# 末尾のプライマリプリフィックス欄は '*' 始まり（WAEリスト固有エンティティ）と
+# 小文字（*GM/s, *JW/b）を取り得る。ここを弾くとそのエンティティのブロックごと
+# 読み飛ばされるので、文字クラスを狭めないこと。
 _HDR_RE = re.compile(
     r'^([^:]+):\s*(\d+):\s*(\d+):\s*([A-Z]{2}):\s*(-?\d+\.?\d*):'
-    r'\s*(-?\d+\.?\d*):\s*(-?\d+\.?\d*):\s*([A-Z0-9\/\-]+):\s*$'
+    r'\s*(-?\d+\.?\d*):\s*(-?\d+\.?\d*):\s*([*A-Za-z0-9\/\-]+):\s*$'
 )
 # プリフィックス内のモディファイア（CQゾーン等）を除去
 _MOD_RE = re.compile(r'\([^)]*\)|\[[^\]]*\]|<[^>]*>|~[^~]*~')
+
+# cty.dat のエンティティ1件分。src は読み込み元ファイル名（衝突解決に使う）
+_Ent = namedtuple('_Ent', 'lat lon entity continent prefix src')
+
+# lookup_info() の戻り値。見つからなかった場合 grid 以外も None になる
+CtyInfo = namedtuple('CtyInfo', 'grid source entity continent prefix')
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +118,8 @@ class CtyLookup:
                         f'cty_data/ not found: {base}'))
             cty_dir = dirs[-1]
         self.cty_dir = Path(cty_dir)
-        self._prefix_map = {}   # prefix_upper → (lat, lon_east, label)
-        self._exact_map  = {}   # callsign_upper → (lat, lon_east, label)
+        self._prefix_map = {}   # prefix_upper   → _Ent
+        self._exact_map  = {}   # callsign_upper → _Ent
         self._verbose    = verbose
         self._load()
 
@@ -141,7 +156,7 @@ class CtyLookup:
         except OSError:
             return
 
-        current_lat = current_lon = current_label = None
+        current_ent = None
         in_entity   = False
         prefix_buf  = ''
 
@@ -153,26 +168,29 @@ class CtyLookup:
             m = _HDR_RE.match(line)
             if m:
                 if in_entity and prefix_buf:
-                    self._register_prefixes(prefix_buf, current_lat, current_lon, current_label)
+                    self._register_prefixes(prefix_buf, current_ent)
                     prefix_buf = ''
                 # cty.dat longitude: positive West → negate for positive East
-                current_lat   = float(m.group(5))
-                current_lon   = -float(m.group(6))
-                current_label = m.group(8).strip()
-                in_entity     = True
+                current_ent = _Ent(lat=float(m.group(5)),
+                                   lon=-float(m.group(6)),
+                                   entity=m.group(1).strip(),
+                                   continent=m.group(4).strip().upper(),
+                                   prefix=m.group(8).strip(),
+                                   src=path.name)
+                in_entity   = True
                 continue
 
             if in_entity:
                 prefix_buf += ' ' + line
                 if ';' in line:
-                    self._register_prefixes(prefix_buf, current_lat, current_lon, current_label)
+                    self._register_prefixes(prefix_buf, current_ent)
                     prefix_buf  = ''
                     in_entity   = False
 
         if in_entity and prefix_buf:
-            self._register_prefixes(prefix_buf, current_lat, current_lon, current_label)
+            self._register_prefixes(prefix_buf, current_ent)
 
-    def _register_prefixes(self, buf, lat, lon_east, label):
+    def _register_prefixes(self, buf, ent):
         raw = buf.replace(';', ' ').replace(',', ' ')
         for token in raw.split():
             token = token.strip()
@@ -184,11 +202,22 @@ class CtyLookup:
             if clean.startswith('='):
                 call = clean[1:].upper()
                 if call:
-                    self._exact_map[call] = (lat, lon_east, label)
+                    # 別ファイル間の上書きは _load() の設計どおり後勝ち
+                    # （サブエンティティファイルが基本エンティティを上書きする）。
+                    # 同一ファイル内で衝突した場合だけ、'*' 付き（WAEリスト固有の
+                    # サブエンティティ）を優先する。cty.dat 内の記載順は
+                    # 特異性を表さないため、後勝ちだと Vienna Intl Ctr が
+                    # Austria に潰される等、広い方が勝ってしまう。
+                    prev = self._exact_map.get(call)
+                    if (prev is not None and prev.src == ent.src
+                            and prev.prefix.startswith('*')
+                            and not ent.prefix.startswith('*')):
+                        continue
+                    self._exact_map[call] = ent
             else:
                 prefix = clean.upper()
                 if prefix:
-                    self._prefix_map[prefix] = (lat, lon_east, label)
+                    self._prefix_map[prefix] = ent
 
     # ---- コールサイン正規化 ------------------------------------------------
 
@@ -259,37 +288,64 @@ class CtyLookup:
 
     # ---- 公開 API ----------------------------------------------------------
 
-    def lookup(self, callsign):
+    def lookup_info(self, callsign):
         """
-        コールサインからグリッドロケータを返す。
-        戻り値: (grid4_str or None, source_str)
+        コールサインからグリッド＋エンティティ情報を返す。
+        戻り値: CtyInfo(grid, source, entity, continent, prefix)
+                引けなかった場合は grid 以外も None。
+
+        continent は cty.dat の大陸コード（'EU' 'AS' 'NA' 'SA' 'AF' 'OC' 'AN'）。
+        prefix はプライマリプリフィックスで、WAEリスト固有のエンティティ
+        （Sicily 等）は '*' で始まる。
         """
+        raw = callsign.upper().strip()
+
+        # 生のコールサインでの完全一致を最優先で見る。
+        # cty.dat の完全一致エントリには '=SV2ASP/A' のようにスラッシュを含む
+        # ものが165件あり、_normalize() を通すと別トークンに分解されてしまって
+        # 到達できない（例: SV2ASP/A → 'A' を引きに行って not-found）。
+        # ただし /MM /AM は運用場所が定まらないため、cty.dat に個別エントリが
+        # あってもロケータを与えない方針を維持する。
+        if (raw in self._exact_map
+                and not raw.endswith('/MM') and not raw.endswith('/AM')):
+            e = self._exact_map[raw]
+            return CtyInfo(latlon_to_grid4(e.lat, e.lon), 'exact',
+                           e.entity, e.continent, e.prefix)
+
         lookup_str, hint = self._normalize(callsign)
 
         if lookup_str is None:
-            return None, hint  # 'no-locator'
+            return CtyInfo(None, hint, None, None, None)  # 'no-locator'
 
         if hint == 'ambiguous':
-            return None, 'ambiguous'
+            return CtyInfo(None, 'ambiguous', None, None, None)
 
         cs = lookup_str.upper()
 
         # 完全一致チェック（=CONTESTエントリ等）
         if cs in self._exact_map:
-            lat, lon, _ = self._exact_map[cs]
-            g = latlon_to_grid4(lat, lon)
-            return g, 'exact'
+            e = self._exact_map[cs]
+            return CtyInfo(latlon_to_grid4(e.lat, e.lon), 'exact',
+                           e.entity, e.continent, e.prefix)
 
         # 最長プリフィックスマッチ
         for length in range(len(cs), 0, -1):
             prefix = cs[:length]
             if prefix in self._prefix_map:
-                lat, lon, _ = self._prefix_map[prefix]
-                g = latlon_to_grid4(lat, lon)
+                e = self._prefix_map[prefix]
                 src = hint if hint in ('area', 'entity', 'stripped') else 'prefix'
-                return g, src
+                return CtyInfo(latlon_to_grid4(e.lat, e.lon), src,
+                               e.entity, e.continent, e.prefix)
 
-        return None, 'not-found'
+        return CtyInfo(None, 'not-found', None, None, None)
+
+    def lookup(self, callsign):
+        """
+        コールサインからグリッドロケータを返す。
+        戻り値: (grid4_str or None, source_str)
+        """
+        info = self.lookup_info(callsign)
+        return info.grid, info.source
 
     def lookup_batch(self, callsigns):
         """
@@ -328,12 +384,15 @@ def main():
         print(msg(f'完全一致総数: {len(cty._exact_map)}\n',
                   f'Total exact: {len(cty._exact_map)}\n'))
 
-    print(msg(f'{"コールサイン":<16}  {"グリッド":<8}  {"ソース":<12}',
-              f'{"Callsign":<16}  {"Grid":<8}  {"Source":<12}'))
-    print('-' * 40)
+    print(msg(f'{"コールサイン":<16}  {"グリッド":<8}  {"ソース":<12}  '
+              f'{"大陸":<4}  {"エンティティ"}',
+              f'{"Callsign":<16}  {"Grid":<8}  {"Source":<12}  '
+              f'{"Cont":<4}  {"Entity"}'))
+    print('-' * 72)
     for cs in args.callsigns:
-        grid, src = cty.lookup(cs)
-        print(f'{cs:<16}  {grid or "-":<8}  {src}')
+        i = cty.lookup_info(cs)
+        print(f'{cs:<16}  {i.grid or "-":<8}  {i.source:<12}  '
+              f'{i.continent or "-":<4}  {i.entity or "-"}')
 
 
 if __name__ == '__main__':
