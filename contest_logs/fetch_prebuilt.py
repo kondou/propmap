@@ -25,6 +25,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -48,15 +49,26 @@ def base_url() -> str:
     return os.environ.get("PROPMAP_DATA_URL", DEFAULT_BASE_URL).rstrip("/")
 
 
-def _get(url: str) -> bytes:
-    req = Request(url, headers={"User-Agent": "PropMap-fetch-prebuilt"})
+def _get(url: str, no_cache: bool = False) -> bytes:
+    headers = {"User-Agent": "PropMap-fetch-prebuilt"}
+    if no_cache:
+        headers["Cache-Control"] = "no-cache"
+        headers["Pragma"] = "no-cache"
+    req = Request(url, headers=headers)
     with urlopen(req, timeout=TIMEOUT) as r:
         return r.read()
 
 
 def fetch_manifest() -> dict:
     """配布 manifest を取得して返す。失敗時は例外。"""
-    data = _get(base_url() + "/manifest.json")
+    url = base_url() + "/manifest.json"
+    # 配信側のキャッシュが古い manifest を返すことがある。データ更新の直後に
+    # 取得しても新しい年が出てこない、という形で表面化するため、URLを毎回
+    # 変えて確実に迂回する。データ本体はファイル名が年ごとに固有で、かつ
+    # sha256 で検証するのでこの処理は不要。
+    if url.startswith(("http://", "https://")):
+        url += ("&" if "?" in url else "?") + f"t={int(time.time())}"
+    data = _get(url, no_cache=True)
     m = json.loads(data.decode("utf-8"))
     if not isinstance(m.get("files"), list):
         raise ValueError("invalid manifest: no files list")
