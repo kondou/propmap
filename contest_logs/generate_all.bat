@@ -90,6 +90,70 @@ if %DRY_RUN%==0 (
     )
 )
 
+REM ---- fetch_ssn (run once; manages its own skip logic) ----
+echo.
+echo ==== Fetch SSN data ====
+call :get_ts
+echo. >> "%LOG_FILE%"
+echo !_TS!  ==== fetch_ssn ==== >> "%LOG_FILE%"
+
+if %FORCE%==1 (
+    echo   ^>^>^> %PYTHON% "%HEATMAP_DIR%\fetch_ssn.py" --force
+) else (
+    echo   ^>^>^> %PYTHON% "%HEATMAP_DIR%\fetch_ssn.py"
+)
+if %DRY_RUN%==0 (
+    if %FORCE%==1 (
+        %PYTHON% "%HEATMAP_DIR%\fetch_ssn.py" --force > "%TEMP%\gall_step.txt" 2>&1
+    ) else (
+        %PYTHON% "%HEATMAP_DIR%\fetch_ssn.py" > "%TEMP%\gall_step.txt" 2>&1
+    )
+    set _RC=!ERRORLEVEL!
+    type "%TEMP%\gall_step.txt"
+    type "%TEMP%\gall_step.txt" >> "%LOG_FILE%"
+    del "%TEMP%\gall_step.txt" 2>nul
+    call :get_ts
+    echo !_TS!  fetch_ssn rc=!_RC! >> "%LOG_FILE%"
+    if !_RC! neq 0 (
+        echo   !!! Error: fetch_ssn.py
+        set /a FAIL+=1
+    ) else (
+        set /a OK+=1
+    )
+)
+
+REM ---- fetch_rbn_nodes (run once; manages its own skip logic) ----
+echo.
+echo ==== Update RBN node list ====
+call :get_ts
+echo. >> "%LOG_FILE%"
+echo !_TS!  ==== fetch_rbn_nodes ==== >> "%LOG_FILE%"
+
+if %FORCE%==1 (
+    echo   ^>^>^> %PYTHON% "%HEATMAP_DIR%\fetch_rbn_nodes.py" --force
+) else (
+    echo   ^>^>^> %PYTHON% "%HEATMAP_DIR%\fetch_rbn_nodes.py"
+)
+if %DRY_RUN%==0 (
+    if %FORCE%==1 (
+        %PYTHON% "%HEATMAP_DIR%\fetch_rbn_nodes.py" --force > "%TEMP%\gall_step.txt" 2>&1
+    ) else (
+        %PYTHON% "%HEATMAP_DIR%\fetch_rbn_nodes.py" > "%TEMP%\gall_step.txt" 2>&1
+    )
+    set _RC=!ERRORLEVEL!
+    type "%TEMP%\gall_step.txt"
+    type "%TEMP%\gall_step.txt" >> "%LOG_FILE%"
+    del "%TEMP%\gall_step.txt" 2>nul
+    call :get_ts
+    echo !_TS!  fetch_rbn_nodes rc=!_RC! >> "%LOG_FILE%"
+    if !_RC! neq 0 (
+        echo   !!! Error: fetch_rbn_nodes.py
+        set /a FAIL+=1
+    ) else (
+        set /a OK+=1
+    )
+)
+
 REM ---- Main loops --------------------------------------------------------------
 REM The contest x year list comes from contest_utils.py --list (derived
 REM automatically from first_year and each contest's schedule; years are

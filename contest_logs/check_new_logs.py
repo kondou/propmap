@@ -475,12 +475,37 @@ def pipeline_steps(contest: str, year: int) -> list:
 
 def cty_step():
     """
-    fetch_cty の事前ステップ（generate_all と同じく、パイプライン群の前に
-    1回だけ実行する。fetch_cty.py 自体が取得済みスキップを持つ）。
-    戻り値: (label, [cmd, ...])
+    fetch_cty の事前ステップ。戻り値: (label, [cmd, ...])
+    （prep_steps() の先頭要素と同じもの。既存の呼び出し互換のため残す）
     """
     py = sys.executable or "python3"
     return ("fetch_cty", [py, str(HEATMAP_DIR / "fetch_cty.py")])
+
+
+def prep_steps():
+    """
+    パイプライン群の前に1回だけ実行する取得ステップ。generate_all.sh と
+    同じ顔ぶれ・同じ順序にする。いずれも取得済みスキップを内蔵しているので
+    毎回実行してよい。
+
+    これらが生成するファイルは配布zipに含まれないため、実行し忘れると
+    新規インストール環境で静かに劣化する:
+      cty_data/                 無いと step4 系が全滅する
+      SN_m_tot_V2.0.txt         無いと SSN が 0 として記録される
+      contest_logs/rbn/rbn_nodes.csv
+                                無いとRBNのスキマー位置が実際の場所ではなく
+                                DXCCエンティティの重心になる（広い国では
+                                数百〜千km単位でずれる）
+
+    戻り値: [(label, [cmd, ...], required), ...]
+            required=True は、取得できず既存も無ければ中断すべきもの。
+    """
+    py = sys.executable or "python3"
+    return [
+        ("fetch_cty",       [py, str(HEATMAP_DIR / "fetch_cty.py")],       True),
+        ("fetch_ssn",       [py, str(HEATMAP_DIR / "fetch_ssn.py")],       False),
+        ("fetch_rbn_nodes", [py, str(HEATMAP_DIR / "fetch_rbn_nodes.py")], False),
+    ]
 
 
 def cty_data_present() -> bool:
@@ -488,23 +513,28 @@ def cty_data_present() -> bool:
     return any((HEATMAP_DIR / "cty_data").glob("cty-[0-9]*"))
 
 
-def ensure_cty_data() -> bool:
+def ensure_prep_data() -> bool:
     """
-    CLI用: cty_data を取得する。取得失敗でも既存データがあれば警告して
-    続行（オフラインでの再実行を止めないため）。データが無く取得も
-    失敗した場合のみ False（後続の step4 系が全滅するため中断する）。
+    CLI用: prep_steps を順に実行する。取得失敗でも、既存データがあるか
+    必須でないものは警告して続行（オフラインでの再実行を止めないため）。
+    cty_data が無く取得も失敗した場合のみ False（後続が全滅するため中断）。
     """
-    label, cmd = cty_step()
-    if run_cmd(cmd, label):
-        return True
-    if cty_data_present():
-        print(msg("警告: cty.dat の更新確認に失敗（既存の cty_data で続行）",
-                  "Warning: cty.dat update check failed "
-                  "(continuing with the existing cty_data)"))
-        return True
-    print(msg("エラー: cty_data が無く、取得にも失敗しました。中断します。",
-              "Error: cty_data is missing and could not be fetched. Aborting."))
-    return False
+    for label, cmd, required in prep_steps():
+        if run_cmd(cmd, label):
+            continue
+        if not required:
+            print(msg(f"警告: {label} に失敗（続行します）",
+                      f"Warning: {label} failed (continuing)"))
+            continue
+        if cty_data_present():
+            print(msg("警告: cty.dat の更新確認に失敗（既存の cty_data で続行）",
+                      "Warning: cty.dat update check failed "
+                      "(continuing with the existing cty_data)"))
+            continue
+        print(msg("エラー: cty_data が無く、取得にも失敗しました。中断します。",
+                  "Error: cty_data is missing and could not be fetched. Aborting."))
+        return False
+    return True
 
 
 def run_pipeline(contest: str, year: int) -> bool:
@@ -614,7 +644,7 @@ def main():
             return
 
     # ---- 実行 ----
-    if not ensure_cty_data():
+    if not ensure_prep_data():
         sys.exit(1)
 
     ok_list, fail_list = [], []

@@ -158,35 +158,42 @@ def _import_worker(targets):
         for t in targets:
             for label, cmd in cnl.pipeline_steps(t["contest"], t["year"]):
                 all_steps.append((t, label, cmd))
-        steps_total = len(all_steps) + 1   # +1 = 先頭の fetch_cty
+        prep = cnl.prep_steps()
+        steps_total = len(all_steps) + len(prep)   # 先頭に取得ステップ群
         with _lock:
             _job["steps_total"] = steps_total
 
-        # cty_data の事前取得（generate_all と同じく最初に1回。
-        # 取得失敗でも既存データがあれば警告して続行、無ければ中断）
-        cty_label, cty_cmd = cnl.cty_step()
-        with _lock:
-            _job["step_index"] = 1
-            _job["step_label"] = cty_label
-        _log_line(f"==== [1/{steps_total}] {cty_label} ====")
-        if _run_step(cty_cmd) != 0:
+        # 事前取得（generate_all と同じ顔ぶれ・同じ順序で最初に1回）。
+        # ここで作られるファイルは配布zipに含まれないため、抜けると
+        # 新規インストール環境で静かに劣化する（RBNのスキマー位置がずれる等）。
+        for pi, (label, cmd, required) in enumerate(prep, 1):
+            with _lock:
+                _job["step_index"] = pi
+                _job["step_label"] = label
+            _log_line(f"==== [{pi}/{steps_total}] {label} ====")
+            if _run_step(cmd) == 0:
+                continue
+            if not required:
+                _log_line(msg(f"警告: {label} に失敗（続行します）",
+                              f"Warning: {label} failed (continuing)"))
+                continue
             if cnl.cty_data_present():
                 _log_line(msg(
                     "警告: cty.dat の更新確認に失敗（既存の cty_data で続行）",
                     "Warning: cty.dat update check failed "
                     "(continuing with the existing cty_data)"))
-            else:
-                with _lock:
-                    _job["state"] = "error"
-                    _job["error"] = msg(
-                        "cty_data が無く、取得にも失敗しました",
-                        "cty_data is missing and could not be fetched")
-                    _job["finished"] = time.time()
-                return
+                continue
+            with _lock:
+                _job["state"] = "error"
+                _job["error"] = msg(
+                    "cty_data が無く、取得にも失敗しました",
+                    "cty_data is missing and could not be fetched")
+                _job["finished"] = time.time()
+            return
 
         failed_contest_year = set()
         results = {}
-        for i, (t, label, cmd) in enumerate(all_steps, 2):
+        for i, (t, label, cmd) in enumerate(all_steps, len(prep) + 1):
             key = (t["contest"], t["year"])
             if key in failed_contest_year:
                 continue   # 前段失敗のcontest/yearは後段を実行しない
