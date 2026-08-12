@@ -58,6 +58,13 @@ def count_records(path: Path) -> int:
         return 0
 
 
+def _is_cert_error(err) -> bool:
+    """証明書の検証失敗か（ネットワーク不通等と区別する）"""
+    import ssl
+    reason = getattr(err, 'reason', err)
+    return isinstance(reason, ssl.SSLCertVerificationError)
+
+
 def fetch() -> bytes:
     req = Request(URL, headers=HEADERS)
     try:
@@ -66,7 +73,33 @@ def fetch() -> bytes:
     except HTTPError as e:
         raise RuntimeError(f'HTTP {e.code}: {URL}')
     except URLError as e:
-        raise RuntimeError(f'URLError {e.reason}: {URL}')
+        if not _is_cert_error(e):
+            raise RuntimeError(f'URLError {e.reason}: {URL}')
+        # 配信元は HARICA（学術系CA）の証明書を使っている。チェーン自体は
+        # 正しいが、そのルートが Windows の信頼ストアに未登録だと Python では
+        # 検証に失敗する（ブラウザは不足ルートを自動取得するので開ける）。
+        # certifi があればそのCAバンドルで一度だけやり直す。
+        try:
+            import ssl
+            import certifi
+        except ImportError:
+            raise RuntimeError(msg(
+                f'証明書の検証に失敗しました: {URL}\n'
+                '  この配信元のルート証明書がシステムに登録されていません。\n'
+                '  pip install certifi を実行すると取得できるようになります。',
+                f'Certificate verification failed: {URL}\n'
+                "  This host's root certificate is not in the system store.\n"
+                '  Running "pip install certifi" lets this step succeed.'))
+        try:
+            ctx = ssl.create_default_context(cafile=certifi.where())
+            with urlopen(req, timeout=TIMEOUT, context=ctx) as r:
+                data = r.read()
+        except Exception as e2:
+            raise RuntimeError(f'URLError {getattr(e2, "reason", e2)}: {URL}')
+        print(msg('  証明書の検証に certifi を使用しました',
+                  '  Used the certifi CA bundle for certificate verification'),
+              flush=True)
+        return data
 
 
 def main():
