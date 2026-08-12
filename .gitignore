@@ -45,6 +45,7 @@ discrepant_calls.txt
 no_locator_calls.txt
 qrz_cache.db
 survey_locators.py
+maint/
 色スケール説明.md
 
 # Claude Code internal
