@@ -221,7 +221,7 @@ The number of loaded records and the selected year(s) are shown in the upper rig
 
 Drag the slider left or right to change the displayed time. The UTC time is shown in the text box on the left. You can also type a time directly (e.g., `14:30`) and press Enter or click away to jump the slider to that time.
 
-For 48-hour contests (CQ WW, CQ WPX), a **+1d** checkbox appears. Check it to switch to Day 2 (24 hours after contest start).
+For 48-hour contests (CQ WW, CQ WPX, WAE DX), a **+1d** checkbox appears. Check it to switch to Day 2 (24 hours after contest start).
 
 ### Set Default / Reset / Apply / Doc
 

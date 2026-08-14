@@ -22,7 +22,7 @@ time of year.
 - Playback, real-time sync (RT), and automatic band cycling (Crawl)
 - Multi-year merge, distance filter, gray-line overlay, ±3 h activity graphs
 - Supported contests: IARU HF (2018–), CQ WW CW/SSB (2005–),
-  CQ WPX CW/SSB (2008–)
+  CQ WPX CW/SSB (2008–), WAE DX CW/SSB (2017–)
 - Built-in data update page: check for newly published logs, see a disk-usage
   estimate, and import them from the browser
 
