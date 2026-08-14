@@ -372,7 +372,7 @@ Hover over a graph to see band-by-band values for that time in a tooltip.
 
 <img src="images/sc8.png" alt="Crawl mode" style="max-width:100%;width:1400px;">
 
-In [RT (Real Time)](#rtreal-time) mode, Crawl cycles through bands automatically at a set interval.
+In [RT (Real Time)](#rt-real-time) mode, Crawl cycles through bands automatically at a set interval.
 
 ### Auto / All / No
 
