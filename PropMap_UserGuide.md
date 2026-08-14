@@ -447,7 +447,7 @@ RBN（Reverse Beacon Network）は、CWやデジタルモードの信号を自�
 
 ### SSN（太陽黒点数）について
 
-`SN_m_tot_V2.0.txt`（SILSOが提供する月別太陽黒点数データ）を使用してコンテスト開催月のSSNを自動解決し、データ処理時に活用する想定（現状 SSN は RBN ペア CSV のメタデータフィールドとして記録されているが、ヒートマップ表示への直接の影響はなく、この値の利用は未実装）。ファイルが存在しない場合は `generate_all.sh`（または `.bat`）実行時に `fetch_ssn.py` が自動的にダウンロードする
+`SN_m_tot_V2.0.txt`（SILSOが提供する月別太陽黒点数データ）を使用してコンテスト開催月のSSNを自動解決し、データ処理時に活用する想定（現状 SSN は RBN ペア CSV のメタデータフィールドとして記録されているが、ヒートマップ表示への直接の影響はなく、この値の利用は未実装）。ファイルが存在しない場合はデータ構築時に自動的にダウンロードされる
 
 ---
 
@@ -458,177 +458,35 @@ PropMap を使用するには各種データを事前に用意する必要があ
 - **構築済みデータの取得（推奨）**: プロジェクトが公開している構築済み JSON をダウンロードする。数分で完了する
 - **自前構築（上級者向け）**: 公開ログと、該当コンテスト開催日時の RBN raw データから全パイプラインを実行する。構築済みデータがまだ公開されていない年をいち早く取り込みたい場合や検証目的に向く。フル構築は数 GB のダウンロードと数時間の処理を要する
 
+どちらも「データ更新」ページからボタン操作で実行でき、コマンドを打つ必要はない。
+
 **データさえ準備できていれば、以降 PropMap の利用にインターネット接続は不要。** 地図・地形データ（`countries-50m.json`）・ヒートマップ再生は手元のファイルのみで完結する。インターネット接続が必要になるのはデータの準備・更新時のみ
+
+### データ更新ページの開き方
+
+`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンクをクリックする。ブラウザで `http://localhost:8765/update.html` を直接開いてもよい
 
 ### 構築済みデータの取得（推奨）
 
-**ブラウザから**
+データ更新ページの「1. 構築済みデータの取得」で「確認する」をクリックする。配布されているコンテスト×年とサイズの一覧が表示されるので、取得したいものを選択して「選択分をダウンロード」を実行する。取得済みのものは「取得済み」と表示され再取得されない
 
-`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの「⟳ データ更新」リンクまたは `http://localhost:8765/update.html` を開き、「1. 構築済みデータの取得」の「確認する」をクリックする。配布されているコンテスト×年とサイズの一覧が表示されるので、取得したいものを選択して「選択分をダウンロード」を実行する。取得済みのものは「取得済み」と表示され再取得されない
+配布元は GitHub Releases。ダウンロードはサイズ・sha256 検証つきで、途中で失敗しても壊れたファイルが残らない
 
-**コマンドラインから**
+### 新規開催年の取り込み（自前構築）
 
-```bash
-cd ~/heatmap/contest_logs
-python3 fetch_prebuilt.py --list      # 配布状況とローカル保持状況の一覧
-python3 fetch_prebuilt.py --dry-run   # ダウンロード対象と合計サイズのみ表示
-python3 fetch_prebuilt.py             # 未保持分をダウンロード（確認あり）
-```
+構築済みデータがまだ公開されていない開催年を、公開ログと RBN データから自分で構築する
 
-配布元は GitHub Releases のローリングリリース（タグ `data-latest`）。ダウンロードはサイズ・sha256 検証つきで、途中失敗時に壊れたファイルが残らない（`.part` に書いてから配置）
+データ更新ページの「2. 公開ログ＋RBNからの自前構築」で「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックする。対象年は開催日程から自動的に導き出されるため、年を指定する必要はない。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）
 
-### データ処理パイプライン（自前構築）
-
-コンテストログデータの処理順序：
-
-``` { .no-copy }
-Cabrilloログ（raw/*.txt）
-    ↓
-step1_collect_logs_fast.py      ログ収集（公開ログからダウンロード）
-    ↓
-make_spotted_grids_approx.py    コールサインからグリッドを推定（cty.dat参照）
-    ↓
-step4_crosscheck.py             QSOペアのクロスチェックとCSV生成（通常）
-step4_crosscheck_approx.py      同上（推定グリッドを使用）
-    ↓
-step5_aggregate.py              CSV → JSON集約（heatmap.html用）
-```
-
-RBNデータの処理順序：
-
-``` { .no-copy }
-RBN raw data（rbn/raw/YYYYMMDD.zip）
-    ↓
-download_rbn.py                 RBN rawデータのダウンロード
-    ↓
-make_spotted_grids.py           スポットされたグリッドの抽出（ログ記載値）
-    ↓
-step4_rbn.py                    RBNペアCSVの生成（通常）
-step4_rbn_approx.py             同上（推定グリッドを使用）
-    ↓
-step5_rbn.py                    CSV → JSON集約（heatmap.html用）
-```
-
-RBNノードリストの更新：
-
-``` { .no-copy }
-fetch_rbn_nodes.py
-    → RBNサイトから現行ノードを取得
-    → raw zipから過去コンテストのスポッターを収集
-    → 旧ノードは cty.dat でグリッドを補完
-    → rbn/rbn_nodes.csv に保存
-```
-
-### 全データの一括再生成
-
-#### macOS / WSL2（generate_all.sh）
-
-まず contest_logs ディレクトリに移動する：
-
-```bash
-cd ~/heatmap/contest_logs
-```
-
-対象確認のみ（実際には実行しない）：
-
-```bash
-bash generate_all.sh --dry-run
-```
-
-本実行：
-
-```bash
-bash generate_all.sh
-```
-
-バックグラウンドで実行する場合：
-
-```bash
-nohup bash generate_all.sh &
-```
-
-進捗確認（スクリプトが内部で `generate_all.log` に記録する）：
-
-```bash
-tail -f generate_all.log
-```
-
-#### Windows（generate_all.bat）
-
-コマンドプロンプトで contest_logs ディレクトリに移動する：
-
-```
-cd %USERPROFILE%\heatmap\contest_logs
-```
-
-対象確認のみ（実際には実行しない）：
-
-```
-generate_all.bat --dry-run
-```
-
-本実行：
-
-```
-generate_all.bat
-```
-
-### 新規開催年の取り込み（check_new_logs.py）
-
-コンテストの新しい開催年が公開されたかを確認し、必要ディスク量の見積もりを確認したうえで取り込むには、**ブラウザからの操作**と**コマンドライン**の2つの方法がある。対象年は開催日程から自動導出されるため、いずれの方法でも年のハードコード更新は不要
-
-**ブラウザから（推奨）**
-
-`start_heatmap` で起動したサーバー（propmap_server.py）が動いている状態で、伝播マップの Contest 選択横の「⟳ データ更新」リンク、または `http://localhost:8765/update.html` を開く。「2. 公開ログ＋RBNからの自前構築」の「確認する」→ 見積もり表の確認 →「ダウンロードと取り込みを実行」の順にクリックするだけで取り込みが完了する。実行中も伝播マップは既存データで通常どおり利用でき、完了後に地図タブへ戻ると新しい年が選択肢に現れる。処理はサーバー側で走るためページを閉じても継続する（起動したターミナルを閉じると停止する）
-
-**コマンドラインから**
-
-```bash
-cd ~/heatmap/contest_logs
-python3 check_new_logs.py --dry-run   # 有無確認と見積もり表示のみ
-python3 check_new_logs.py             # 見積もり表示 → y/n 確認 → 取り込み実行
-python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
-```
-
-表示される見積もりは「公開ログDLサイズ / RBN zipサイズ / JSON変換後サイズ」の3項目。公開ログとJSONは既存年の実績からの推定値、RBN zipはHEADリクエストによる実測値。空き容量が見積もり合計を下回る場合は実行前に中断される。RBN rawはzipのまま保持され、JSON生成時にのみ一時展開される（従来どおり）
+表示される見積もりは「公開ログDLサイズ / RBN zipサイズ / JSON変換後サイズ」の3項目。空き容量が見積もり合計を下回る場合は実行前に中断される
 
 **所要時間について:** 生ログとRBNデータをゼロから取得・処理するため、PCや回線速度によってはコンテスト・年が1件だけでも1時間以上かかることがあり、大規模なコンテストでは数時間に及ぶこともある。進捗表示はステップ名のみで割合（％）は出ないため、長時間見た目が変化しなくても正常な処理中であることが多い
 
-**中断・再開について:** PCのスリープ・シャットダウンやウィンドウを閉じるなどで処理が中断した場合、再度「確認する」→「ダウンロードと取り込みを実行」を行うと、完了済みのステップは再実行せず未完了の部分から再開する（`generate_all.sh` と同じ判定方式）。ダウンロード中のファイルが中断された場合も、不完全なファイルが「完了」として扱われることはなく、次回実行時に正しく再取得される
+**中断・再開について:** PCのスリープ・シャットダウンやウィンドウを閉じるなどで処理が中断した場合、再度「確認する」→「ダウンロードと取り込みを実行」を行うと、完了済みのステップは再実行せず未完了の部分から再開する。ダウンロード中のファイルが中断された場合も、不完全なファイルが「完了」として扱われることはなく、次回実行時に正しく再取得される
 
-### 各スクリプトの役割
+### コマンドラインからの操作
 
-| スクリプト | 役割 |
-|---|---|
-| `contest_utils.py` | コンテスト定義、パス解決、SSN自動解決の共通ユーティリティ |
-| `step1_collect_logs_fast.py` | 公開ログの収集・ダウンロード |
-| `step3_grid_survey.py` | ログファイルのグリッドロケーター含有状況調査 |
-| `step4_crosscheck.py` | QSOのクロスチェックとペアCSV生成 |
-| `step4_crosscheck_approx.py` | QSOのクロスチェックとペアCSV生成（cty.dat推定グリッド使用） |
-| `step4_rbn.py` | RBNデータの処理とペアCSV生成 |
-| `step4_rbn_approx.py` | RBNデータの処理とペアCSV生成（cty.dat推定グリッド使用） |
-| `step5_aggregate.py` | QSOペアCSV → ヒートマップJSON |
-| `step5_rbn.py` | RBNペアCSV → ヒートマップJSON |
-| `make_spotted_grids.py` | RBNスポットグリッドの抽出 |
-| `make_spotted_grids_approx.py` | RBNスポットグリッドの抽出（cty.dat フォールバック付き） |
-| `lookup_cty.py` | cty.dat からコールサインのグリッドを引くモジュール |
-| `download_rbn.py` | RBN rawデータ（zip）のダウンロード |
-| `check_new_logs.py` | 新規開催年の公開ログ/RBNの有無確認・サイズ見積もり・取り込み |
-| `fetch_prebuilt.py` | 構築済みヒートマップJSONのダウンロード（配布リリース参照） |
-| `make_data_release.py` | 構築済みデータのローリングリリース更新（メンテナ用） |
-| `propmap_server.py` | ローカルサーバー（静的配信 + データ更新API、標準ライブラリのみ） |
-| `update.html` | データ更新ページ（構築済みデータ取得と自前構築をブラウザから操作） |
-| `extract_json.py` | 大容量JSONから条件を絞って切り出し（デバッグ用） |
-| `fetch_cty.py` | cty.dat 一式をダウンロード（`cty_data/` に配置） |
-| `fetch_ssn.py` | 太陽黒点数データ（SN_m_tot_V2.0.txt）をダウンロード |
-| `fetch_rbn_nodes.py` | RBNノードリスト（`rbn/rbn_nodes.csv`）を生成・更新 |
-| `generate_all.sh` | 全コンテスト・全年の一括再生成（macOS/Linux用） |
-| `generate_all.bat` | 全コンテスト・全年の一括再生成（Windows用） |
-| `check_qso_count.py` | 指定条件で `qso_pairs.csv` を検索し、パネル表示対象を確認（デバッグ用） |
-| `check_rbn_count.py` | 指定条件で `rbn_pairs.csv` を検索し、RBNパネル表示対象を確認（デバッグ用） |
-| `check_rbn_detail.py` | `*_rbn.json` のレコード構造を確認（デバッグ用） |
-| `check_rbn_csv.py` | RBN CSV の utc_day 分布を確認（デバッグ用） |
-| `check_rbn_json.py` | RBN JSON の t_step 分布を確認（デバッグ用） |
+同じ準備作業はコマンドラインからも行える。`contest_logs/` 以下の各スクリプトが `--help` に使い方を持っているので、そちらを参照すること。本ガイドでは扱わない
 
 ---
 
@@ -642,43 +500,17 @@ python3 check_new_logs.py --contest cqwpx_cw   # 対象コンテストを限定
 
 以下の順で確認する。
 
-1. **JSON ファイルの存在確認**  
-   `data/` に対象ファイル（例: `cqwpx_cw_2024.json`）があるか確認する。なければ `generate_all.sh`（または `.bat`）で再生成する。既存ファイルがあってもステップを強制再実行したい場合は `--force` を付ける
-
-   ```bash
-   cd ~/heatmap/contest_logs
-   bash generate_all.sh          # 未生成ファイルのみ処理
-   bash generate_all.sh --force  # 全ステップ強制再実行
-   ```
-
-2. **コンテスト・年・フィルター設定の確認**  
+1. **コンテスト・年・フィルター設定の確認**  
    Band / Mode / Dist / Year の選択が意図したものになっているか確認する。特に Dist が小さすぎると表示対象が少なくなる
 
-3. **CSV レベルでの確認（QSO）**  
-   ```bash
-   python3 check_qso_count.py --contest cqwpx_cw --year 2024 \
-     --center PM52 --dist-km 500 --hour 12 --min 0
-   ```
-   該当なしであればそのコンテスト・年・各条件にパネル表示対象の QSO が存在しないことを意味する
+2. **データの有無の確認**  
+   「データ更新」ページの「1. 構築済みデータの取得」で「確認する」をクリックし、そのコンテスト・年が「取得済み」になっているか確認する。なっていなければ選択してダウンロードする
 
-4. **CSV レベルでの確認（RBN）**  
-   ```bash
-   python3 check_rbn_count.py --contest cqwpx_cw --year 2024 \
-     --center PM52 --dist-km 500 --hour 12 --min 0
-   ```
+上記でも表示されない場合は、そのコンテスト・年・条件に該当する QSO が存在しない可能性がある。年や Dist を変えて確認する
 
 ### est. データが表示されない
 
-`data/` に `*_approx.json` ファイルが存在しない。通常は `generate_all.sh`（または `.bat`）が approx ステップも含めて自動実行する。特定コンテスト・年の approx だけ手動で再生成したい場合は以下を実行する
-
-```bash
-cd ~/heatmap/contest_logs
-python3 step4_crosscheck_approx.py --contest cqwpx_cw --year 2024 \
-  --max-call-dist 2 --band-fix-window 15 --annotate-logs
-python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
-  --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
-  --output ../data/cqwpx_cw_2024_approx.json
-```
+そのコンテスト・年の推定データ（`*_approx.json`）が手元に無い。「データ更新」ページの「1. 構築済みデータの取得」から該当のコンテスト・年を取得し直す。配布データには推定データも含まれている
 
 ### アニメーション（点滅）やドラッグ操作がカクつく・止まる、Play が間引かれる
 

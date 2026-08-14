@@ -36,9 +36,9 @@ Network）スポットデータをもとに、過去の HF 帯伝搬を自局グ
 
 1. [最新リリースの zip](https://github.com/kondou/propmap/releases/latest/download/propmap-latest.zip)
    （常に最新版を指す固定リンク。ブックマーク推奨）をダウンロード
-   （またはこのリポジトリを clone）し、好きな場所に配置する（フォルダ名は
-   問わない。例: `~/heatmap`（macOS/Linux/WSL2）や `%USERPROFILE%\heatmap`
-   （Windows））
+   （またはこのリポジトリを clone）し、好きな場所に配置する（zip を展開すると
+   `propmap-latest` フォルダができる。例: `~/propmap-latest`（macOS/Linux/
+   WSL2）や `%USERPROFILE%\propmap-latest`（Windows）。名前の変更・移動は自由）
 2. `start_heatmap.command`（macOS）または `start_heatmap.bat`（Windows）を
    ダブルクリックする
    - macOS の初回のみ: 右クリック →「開く」で起動する
@@ -77,8 +77,8 @@ Windows:上書きされるファイルは新しくダウンロードした zip �
   データから全パイプラインを自分で実行する。構築済み未公開の年の取り込み
   に有用。フル構築は数 GB のダウンロードと数時間の処理を要する
 
-いずれもコマンドラインからも実行できる（`fetch_prebuilt.py` /
-`generate_all.sh`）。詳細はユーザーガイドを参照。
+いずれもコマンドラインからも実行できる。使い方は `contest_logs/` 以下の
+各スクリプトの `--help` を参照。
 
 **データさえ準備できていれば、PropMap にインターネット接続は不要。** 地図・
 地形データ・ヒートマップ再生はすべて手元のファイルだけで完結する。

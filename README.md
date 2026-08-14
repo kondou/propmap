@@ -37,9 +37,10 @@ time of year.
 ## Quick start
 
 1. Download the [latest release zip](https://github.com/kondou/propmap/releases/latest/download/propmap-latest.zip)
-   (or clone this repository) and place it anywhere you like — e.g.
-   `~/heatmap` (macOS/Linux/WSL2) or `%USERPROFILE%\heatmap` (Windows); the
-   folder name doesn't matter. That link always points to the newest
+   (or clone this repository) and place it anywhere you like. Expanding the
+   zip gives you a `propmap-latest` folder — e.g. `~/propmap-latest`
+   (macOS/Linux/WSL2) or `%USERPROFILE%\propmap-latest` (Windows) — and you
+   can rename or move it freely. That link always points to the newest
    version — bookmark it if you'd like
 2. Double-click `start_heatmap.command` (macOS) or `start_heatmap.bat`
    (Windows)
@@ -93,8 +94,8 @@ installing, from the "Data update" page linked from the map screen:
   published as pre-built data. A full build downloads many gigabytes and
   can take hours
 
-Both are also available from the command line (`fetch_prebuilt.py` /
-`generate_all.sh`); see the user guide.
+Both are also available from the command line — the scripts under
+`contest_logs/` document their usage under `--help`.
 
 **Once data is prepared, PropMap needs no internet connection.** The map,
 its terrain data, and the heatmap/replay all run from files on your own

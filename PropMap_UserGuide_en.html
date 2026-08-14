@@ -531,7 +531,7 @@ Radius: 20,000km
 <h3 id="about-rbn-data">About RBN Data</h3>
 <p>RBN (Reverse Beacon Network) is a network that automatically receives, decodes, and spots CW and digital mode signals. PropMap uses RBN spot data to visualize propagation conditions not captured in contest logs. RBN data is available only for CW contests (IARU, CQ WW CW, CQ WPX CW, WAE DX CW).</p>
 <h3 id="about-ssn-sunspot-number">About SSN (Sunspot Number)</h3>
-<p><code>SN_m_tot_V2.0.txt</code> (monthly sunspot number data provided by SILSO) is used to automatically resolve the SSN for the contest month and apply it during data processing (planned — not yet implemented). If the file does not exist, <code>fetch_ssn.py</code> automatically downloads it when <code>generate_all.sh</code> (or <code>.bat</code>) is run.</p>
+<p><code>SN_m_tot_V2.0.txt</code> (monthly sunspot number data provided by SILSO) is used to automatically resolve the SSN for the contest month and apply it during data processing (planned — not yet implemented). If the file does not exist, it is downloaded automatically when data is built.</p>
 <hr />
 <h2 id="10-advance-data-preparation">10. Advance Data Preparation</h2>
 <p>PropMap requires data to be prepared in advance — it is too large to bundle with the tool. There are two ways to obtain it:</p>
@@ -539,216 +539,21 @@ Radius: 20,000km
 <li><strong>Download pre-built data (recommended)</strong>: fetch ready-made JSON published by the project. Takes minutes</li>
 <li><strong>Build it yourself (advanced)</strong>: run the full pipeline from public logs and RBN raw data covering the same contest period. Suited to importing a year not yet published as pre-built data, or to verification. A full build downloads several GB and takes hours</li>
 </ul>
+<p>Both are driven from the Data update page by clicking buttons — no commands to type.</p>
 <p><strong>Once data is prepared, using PropMap needs no internet connection.</strong> The map, its terrain data (<code>countries-50m.json</code>), and heatmap playback all run entirely from local files. An internet connection is only needed to prepare or refresh data.</p>
+<h3 id="opening-the-data-update-page">Opening the Data Update Page</h3>
+<p>With the server started via <code>start_heatmap</code> (propmap_server.py) running, click the "⟳ Data update" link next to the Contest selector on the map screen. Opening <code>http://localhost:8765/update.html</code> directly in the browser works too.</p>
 <h3 id="downloading-pre-built-data-recommended">Downloading Pre-built Data (Recommended)</h3>
-<p><strong>From the browser</strong></p>
-<p>With the server started via <code>start_heatmap</code> (propmap_server.py) running, open the "⟳ Data update" link on the map screen or <code>http://localhost:8765/update.html</code>, and click "Check" under "1. Download pre-built data". A list of distributed contest-years with sizes appears; select what you want and click "Download selected". Items already held are marked "held" and are not re-downloaded.</p>
-<p><strong>From the command line</strong></p>
-<pre><code class="language-bash">cd ~/heatmap/contest_logs
-python3 fetch_prebuilt.py --list      # list availability and local holdings
-python3 fetch_prebuilt.py --dry-run   # show download targets and total size only
-python3 fetch_prebuilt.py             # download missing data (with confirmation)
-</code></pre>
-<p>The distribution source is a rolling GitHub Release (tag <code>data-latest</code>). Downloads are verified by size and sha256, and a failed transfer never leaves a corrupt file in place (data is written to a <code>.part</code> file first).</p>
-<h3 id="data-processing-pipeline-self-build">Data Processing Pipeline (Self-build)</h3>
-<p>Contest log processing order:</p>
-<pre><code class="language-no-copy">Cabrillo logs (raw/*.txt)
-    ↓
-step1_collect_logs_fast.py      Collect and download public logs
-    ↓
-make_spotted_grids_approx.py    Estimate grids from callsigns (via cty.dat)
-    ↓
-step4_crosscheck.py             Cross-check QSO pairs and generate CSV (regular)
-step4_crosscheck_approx.py      Same, using estimated grids
-    ↓
-step5_aggregate.py              CSV → JSON aggregation (for heatmap.html)
-</code></pre>
-<p>RBN data processing order:</p>
-<pre><code class="language-no-copy">RBN raw data (rbn/raw/YYYYMMDD.zip)
-    ↓
-download_rbn.py                 Download RBN raw data
-    ↓
-make_spotted_grids.py           Extract spotted grids (from log-declared values)
-    ↓
-step4_rbn.py                    Generate RBN pair CSV (regular)
-step4_rbn_approx.py             Same, using estimated grids
-    ↓
-step5_rbn.py                    CSV → JSON aggregation (for heatmap.html)
-</code></pre>
-<p>RBN node list update:</p>
-<pre><code class="language-no-copy">fetch_rbn_nodes.py
-    → Fetch current nodes from RBN site
-    → Collect spotters from past contest raw zips
-    → Resolve unknown nodes via cty.dat
-    → Save to rbn/rbn_nodes.csv
-</code></pre>
-<h3 id="batch-regeneration-of-all-data">Batch Regeneration of All Data</h3>
-<h4 id="macos-wsl2-generate_allsh">macOS / WSL2 (generate_all.sh)</h4>
-<p>First, navigate to the contest_logs directory:</p>
-<pre><code class="language-bash">cd ~/heatmap/contest_logs
-</code></pre>
-<p>Preview targets only (no execution):</p>
-<pre><code class="language-bash">bash generate_all.sh --dry-run
-</code></pre>
-<p>Execute:</p>
-<pre><code class="language-bash">bash generate_all.sh
-</code></pre>
-<p>To run in the background:</p>
-<pre><code class="language-bash">nohup bash generate_all.sh &amp;
-</code></pre>
-<p>Monitor progress (the script writes internally to <code>generate_all.log</code>):</p>
-<pre><code class="language-bash">tail -f generate_all.log
-</code></pre>
-<h4 id="windows-generate_allbat">Windows (generate_all.bat)</h4>
-<p>Open Command Prompt and navigate to the contest_logs directory:</p>
-<pre><code>cd %USERPROFILE%\heatmap\contest_logs
-</code></pre>
-<p>Preview targets only (no execution):</p>
-<pre><code>generate_all.bat --dry-run
-</code></pre>
-<p>Execute:</p>
-<pre><code>generate_all.bat
-</code></pre>
-<h3 id="importing-newly-published-years-check_new_logspy">Importing Newly Published Years (check_new_logs.py)</h3>
-<p>To check whether a new contest year has been published, review the disk-usage estimate, and import it, there are two methods: <strong>from the browser</strong> and <strong>from the command line</strong>. Target years are derived automatically from the contest schedule, so neither method requires hardcoded year updates.</p>
-<p><strong>From the browser (recommended)</strong></p>
-<p>With the server started via <code>start_heatmap</code> (propmap_server.py) running, open the "⟳ Data update" link next to the Contest selector on the map screen, or <code>http://localhost:8765/update.html</code>. Under "2. Build from public logs + RBN", click "Check" → review the estimate table → "Download and import". The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).</p>
-<p><strong>From the command line</strong></p>
-<pre><code class="language-bash">cd ~/heatmap/contest_logs
-python3 check_new_logs.py --dry-run   # availability check and estimate only
-python3 check_new_logs.py             # estimate → y/n confirmation → import
-python3 check_new_logs.py --contest cqwpx_cw   # limit to one contest
-</code></pre>
-<p>The estimate shows three items: public-log download size / RBN zip size / converted JSON size. Public logs and JSON are estimated from existing years; RBN zip sizes are measured via HEAD requests. If free disk space is below the estimated total, the run is aborted before starting. RBN raw data is kept as zips and only extracted temporarily during JSON generation (as before).</p>
+<p>On the Data update page, click "Check" under "1. Download pre-built data". A list of distributed contest-years with sizes appears; select what you want and click "Download selected". Items already held are marked "held" and are not re-downloaded.</p>
+<p>The distribution source is GitHub Releases. Downloads are verified by size and sha256, and a failed transfer never leaves a corrupt file in place.</p>
+<h3 id="importing-newly-published-years-self-build">Importing Newly Published Years (Self-build)</h3>
+<p>This builds a contest year that has not yet been published as pre-built data, from public logs and RBN data.</p>
+<p>On the Data update page, under "2. Build from public logs + RBN", click "Check" → review the estimate table → "Download and import". Target years are derived automatically from the contest schedule, so there is no year to specify. The map keeps working on existing data while the job runs; when it finishes, the new year appears in the year list on the map tab. Processing runs on the server, so the page can be closed (closing the terminal that started the server stops the job).</p>
+<p>The estimate shows three items: public-log download size / RBN zip size / converted JSON size. If free disk space is below the estimated total, the run is aborted before starting.</p>
 <p><strong>About how long it takes:</strong> since raw logs and RBN data are fetched and processed from scratch, even a single contest/year can take an hour or more depending on your PC and connection speed, and large contests can take several hours. Progress is shown as a step name only, with no percentage, so a long wait with no visible change is usually still normal processing.</p>
-<p><strong>About interruption and resuming:</strong> if processing is interrupted (PC sleep/shutdown, closing the window, etc.), running "Check" then "Download and import" again resumes from the incomplete step instead of re-running steps that already finished (the same scheme as <code>generate_all.sh</code>). A file interrupted mid-download is never treated as "complete" either — it is correctly re-fetched on the next run.</p>
-<h3 id="script-reference">Script Reference</h3>
-<table>
-<thead>
-<tr>
-<th>Script</th>
-<th>Role</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>contest_utils.py</code></td>
-<td>Common utilities: contest definitions, path resolution, SSN auto-resolution</td>
-</tr>
-<tr>
-<td><code>step1_collect_logs_fast.py</code></td>
-<td>Collect and download public logs</td>
-</tr>
-<tr>
-<td><code>step3_grid_survey.py</code></td>
-<td>Survey grid locator coverage in log files</td>
-</tr>
-<tr>
-<td><code>step4_crosscheck.py</code></td>
-<td>QSO cross-check and pair CSV generation</td>
-</tr>
-<tr>
-<td><code>step4_crosscheck_approx.py</code></td>
-<td>QSO cross-check and pair CSV generation (using cty.dat estimated grids)</td>
-</tr>
-<tr>
-<td><code>step4_rbn.py</code></td>
-<td>RBN data processing and pair CSV generation</td>
-</tr>
-<tr>
-<td><code>step4_rbn_approx.py</code></td>
-<td>RBN data processing and pair CSV generation (using cty.dat estimated grids)</td>
-</tr>
-<tr>
-<td><code>step5_aggregate.py</code></td>
-<td>QSO pair CSV → heatmap JSON</td>
-</tr>
-<tr>
-<td><code>step5_rbn.py</code></td>
-<td>RBN pair CSV → heatmap JSON</td>
-</tr>
-<tr>
-<td><code>make_spotted_grids.py</code></td>
-<td>Extract RBN spotted grids</td>
-</tr>
-<tr>
-<td><code>make_spotted_grids_approx.py</code></td>
-<td>Extract RBN spotted grids (with cty.dat fallback)</td>
-</tr>
-<tr>
-<td><code>lookup_cty.py</code></td>
-<td>Module to look up grid locator from callsign via cty.dat</td>
-</tr>
-<tr>
-<td><code>download_rbn.py</code></td>
-<td>Download RBN raw data (zip)</td>
-</tr>
-<tr>
-<td><code>check_new_logs.py</code></td>
-<td>Check for newly published contest years, estimate disk usage, and import</td>
-</tr>
-<tr>
-<td><code>fetch_prebuilt.py</code></td>
-<td>Download pre-built heatmap JSON from the distribution release</td>
-</tr>
-<tr>
-<td><code>make_data_release.py</code></td>
-<td>Update the rolling pre-built data release (maintainer)</td>
-</tr>
-<tr>
-<td><code>propmap_server.py</code></td>
-<td>Local server (static files + data-update API, stdlib only)</td>
-</tr>
-<tr>
-<td><code>update.html</code></td>
-<td>Data update page (pre-built downloads and self-build from the browser)</td>
-</tr>
-<tr>
-<td><code>extract_json.py</code></td>
-<td>Extract records from large JSON by condition (debug)</td>
-</tr>
-<tr>
-<td><code>fetch_cty.py</code></td>
-<td>Download cty.dat files (places in <code>cty_data/</code>)</td>
-</tr>
-<tr>
-<td><code>fetch_ssn.py</code></td>
-<td>Download sunspot number data (SN_m_tot_V2.0.txt)</td>
-</tr>
-<tr>
-<td><code>fetch_rbn_nodes.py</code></td>
-<td>Generate and update RBN node list (<code>rbn/rbn_nodes.csv</code>)</td>
-</tr>
-<tr>
-<td><code>generate_all.sh</code></td>
-<td>Batch regeneration for all contests and years (macOS/Linux)</td>
-</tr>
-<tr>
-<td><code>generate_all.bat</code></td>
-<td>Batch regeneration for all contests and years (Windows)</td>
-</tr>
-<tr>
-<td><code>check_qso_count.py</code></td>
-<td>Search <code>qso_pairs.csv</code> by condition to verify panel display targets (debug)</td>
-</tr>
-<tr>
-<td><code>check_rbn_count.py</code></td>
-<td>Search <code>rbn_pairs.csv</code> by condition to verify RBN panel display targets (debug)</td>
-</tr>
-<tr>
-<td><code>check_rbn_detail.py</code></td>
-<td>Inspect record structure of <code>*_rbn.json</code> (debug)</td>
-</tr>
-<tr>
-<td><code>check_rbn_csv.py</code></td>
-<td>Inspect utc_day distribution in RBN CSV (debug)</td>
-</tr>
-<tr>
-<td><code>check_rbn_json.py</code></td>
-<td>Inspect t_step distribution in RBN JSON (debug)</td>
-</tr>
-</tbody>
-</table>
+<p><strong>About interruption and resuming:</strong> if processing is interrupted (PC sleep/shutdown, closing the window, etc.), running "Check" then "Download and import" again resumes from the incomplete step instead of re-running steps that already finished. A file interrupted mid-download is never treated as "complete" either — it is correctly re-fetched on the next run.</p>
+<h3 id="from-the-command-line">From the Command Line</h3>
+<p>The same preparation can be driven from the command line. The scripts under <code>contest_logs/</code> document their usage under <code>--help</code>; refer to that. This guide does not cover it.</p>
 <hr />
 <h2 id="11-troubleshooting">11. Troubleshooting</h2>
 <h3 id="opening-heatmaphtml-directly-in-a-browser-shows-no-data">Opening <code>heatmap.html</code> directly in a browser shows no data</h3>
@@ -756,41 +561,18 @@ python3 check_new_logs.py --contest cqwpx_cw   # limit to one contest
 <h3 id="no-panels-are-shown-at-all">No panels are shown at all</h3>
 <p>Check in the following order.</p>
 <ol>
-<li><strong>Confirm the JSON files exist</strong>
-   Check whether the target file (e.g. <code>cqwpx_cw_2024.json</code>) exists in <code>data/</code>. If not, regenerate it with <code>generate_all.sh</code> (or <code>.bat</code>). Add <code>--force</code> if you want to force a step to re-run even when the file already exists.</li>
-</ol>
-<p><code>bash
-   cd ~/heatmap/contest_logs
-   bash generate_all.sh          # only process what's missing
-   bash generate_all.sh --force  # force re-run every step</code></p>
-<ol>
 <li>
 <p><strong>Check the contest/year/filter settings</strong>
    Confirm the Band / Mode / Dist / Year selections are what you intended. In particular, a Dist that's too small will leave little to display.</p>
 </li>
 <li>
-<p><strong>Check at the CSV level (QSO)</strong>
-   <code>bash
-   python3 check_qso_count.py --contest cqwpx_cw --year 2024 \
-     --center PM52 --dist-km 500 --hour 12 --min 0</code>
-   No results means there are no QSOs eligible for panel display for that contest/year/condition set.</p>
-</li>
-<li>
-<p><strong>Check at the CSV level (RBN)</strong>
-   <code>bash
-   python3 check_rbn_count.py --contest cqwpx_cw --year 2024 \
-     --center PM52 --dist-km 500 --hour 12 --min 0</code></p>
+<p><strong>Check whether the data is there</strong>
+   On the "Data update" page, click "Check" under "1. Download pre-built data" and see whether that contest-year is marked "held". If it isn't, select it and download it.</p>
 </li>
 </ol>
+<p>If it still shows nothing, there may be no QSOs matching that contest, year, and set of conditions. Try a different year or a wider Dist.</p>
 <h3 id="est-data-is-not-shown">est. data is not shown</h3>
-<p><code>data/</code> has no <code>*_approx.json</code> file. <code>generate_all.sh</code> (or <code>.bat</code>) normally runs the approx step automatically as part of the full build. To manually regenerate approx data for a specific contest/year:</p>
-<pre><code class="language-bash">cd ~/heatmap/contest_logs
-python3 step4_crosscheck_approx.py --contest cqwpx_cw --year 2024 \
-  --max-call-dist 2 --band-fix-window 15 --annotate-logs
-python3 step5_aggregate.py --contest cqwpx_cw --year 2024 \
-  --input csv/cqwpx_cw_2024_qso_pairs_approx.csv \
-  --output ../data/cqwpx_cw_2024_approx.json
-</code></pre>
+<p>The estimated data (<code>*_approx.json</code>) for that contest-year is not present locally. Download that contest-year again from "1. Download pre-built data" on the "Data update" page — the distributed data includes the estimated data.</p>
 <h3 id="the-blinking-animation-or-dragging-stutters-or-stops-or-play-skips-frames">The blinking animation or dragging stutters or stops, or Play skips frames</h3>
 <ul>
 <li>Putting the PropMap tab in the background pauses the blinking due to browser timer throttling. This is normal browser behavior, not a bug.</li>
