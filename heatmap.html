@@ -612,7 +612,7 @@ async function refreshDatasets(){
 }
 // 起動時と、更新タブから戻ってきた時（フォーカス取得時）に再取得
 window.addEventListener('focus', refreshDatasets);
-refreshDatasets();
+const _dsReady = refreshDatasets();
 
 
 function contestCfg(){
@@ -1437,6 +1437,7 @@ function _rbnChartsVisible(){
 function updateCharts(floatOffset){
   const centerStep=getQueryStep();
   const chartData=computeChartData(centerStep);
+  if(!chartData)return; // データ未ロード時は描くものが無い
   // 通常時(floatOffset未指定): centerContestIdxを使う
   // 再生時(floatOffset指定): その値をそのまま使う
   const nowCI=(floatOffset!==undefined&&floatOffset!==null)?floatOffset:(chartData.centerContestIdx??0);
@@ -3012,6 +3013,8 @@ async function init(){
   const topo=await loadJSON(['./countries-50m.json']);
   if(topo)worldFeatures=topojson.feature(topo,topo.objects.countries);
   buildBandLegend();
+  // 既定の年はデータ実在年から選ぶため、初回の一覧取得を待ってから年パネルを作る
+  await _dsReady;
   updateYearPanel();
   // data-tip-key → data-tip を言語に応じて展開
   document.querySelectorAll('[data-tip-key]').forEach(el=>{
