@@ -95,6 +95,7 @@ All files are placed under `~/heatmap/` (macOS/Linux/WSL2) or `%USERPROFILE%\hea
 ├── start_heatmap.command     Launcher (macOS)
 ├── start_heatmap.bat         Launcher (Windows)
 ├── countries-50m.json        Terrain data
+├── vendor/                   Map rendering libraries (d3 / topojson)
 ├── fetch_cty.py              cty.dat download script
 ├── fetch_ssn.py              Sunspot number data download script
 ├── fetch_rbn_nodes.py        RBN node list generation script

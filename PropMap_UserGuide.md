@@ -95,6 +95,7 @@ bash ~/heatmap/start_heatmap.command
 ├── start_heatmap.command     起動スクリプト（macOS用）
 ├── start_heatmap.bat         起動スクリプト（Windows用）
 ├── countries-50m.json        地形データ
+├── vendor/                   地図描画ライブラリ（d3 / topojson）
 ├── fetch_cty.py              cty.dat 一式ダウンロードスクリプト
 ├── fetch_ssn.py              太陽黒点数データダウンロードスクリプト
 ├── fetch_rbn_nodes.py        RBNノードリスト生成スクリプト

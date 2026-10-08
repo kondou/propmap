@@ -329,8 +329,8 @@ canvas#cv { display:block; cursor:crosshair; }
 </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="vendor/d3.min.js"></script>
+<script src="vendor/topojson.min.js"></script>
 <script>
 async function loadJSON(paths){
   for(const p of paths){
@@ -3006,8 +3006,7 @@ function updateStatus(){
 async function init(){
   updateInpHour(0);
   document.getElementById('status').textContent='Loading world map…';
-  const topo=await loadJSON(['./countries-50m.json',
-    'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json']);
+  const topo=await loadJSON(['./countries-50m.json']);
   if(topo)worldFeatures=topojson.feature(topo,topo.objects.countries);
   buildBandLegend();
   updateYearPanel();
