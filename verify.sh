@@ -138,9 +138,22 @@ code="$(curl -s "http://127.0.0.1:$TESTPORT/api/datasets")"
 echo "$code" | grep -q '"iaru"' || { d4_ok=0; d4_detail="datasets: $code"; }
 code="$(curl -s -H 'Host: evil.example.com' -o /dev/null -w '%{http_code}' "http://127.0.0.1:$TESTPORT/api/datasets")"
 [ "$code" = "403" ] || { d4_ok=0; d4_detail="host-guard -> $code"; }
+# 送信元ガード。POST 先は /api/prebuilt/import（check 結果が無い状態では
+# ガード通過後に 400 を返すだけで、ジョブは始まらない）
+d4_post() { curl -s -X POST -H "$1" -o /dev/null -w '%{http_code}' "http://127.0.0.1:$TESTPORT/api/prebuilt/import"; }
+code="$(d4_post 'Sec-Fetch-Site: cross-site')"
+[ "$code" = "403" ] || { d4_ok=0; d4_detail="origin-guard cross-site -> $code"; }
+code="$(d4_post 'Sec-Fetch-Site: same-site')"
+[ "$code" = "403" ] || { d4_ok=0; d4_detail="origin-guard same-site -> $code"; }
+code="$(d4_post 'Origin: http://evil.example.com')"
+[ "$code" = "403" ] || { d4_ok=0; d4_detail="origin-guard foreign Origin -> $code"; }
+code="$(d4_post 'Sec-Fetch-Site: same-origin')"
+[ "$code" = "400" ] || { d4_ok=0; d4_detail="origin-guard same-origin -> $code"; }
+code="$(d4_post "Origin: http://127.0.0.1:$TESTPORT")"
+[ "$code" = "400" ] || { d4_ok=0; d4_detail="origin-guard own Origin -> $code"; }
 kill "$SRV_PID" 2>/dev/null; SRV_PID=""
 if [ "$d4_ok" = "1" ]; then
-  ok "D4 server: static 200 / datasets json / host-guard 403"
+  ok "D4 server: static 200 / datasets json / host-guard 403 / origin-guard"
 else
   ng "D4 server" "${d4_detail:-unknown} (server log: $(head -2 "$TMPD/srv"))"
 fi

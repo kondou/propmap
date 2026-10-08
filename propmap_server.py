@@ -327,6 +327,22 @@ class PropMapHandler(SimpleHTTPRequestHandler):
         host = (self.headers.get("Host") or "").split(":")[0].lower()
         return host in ("localhost", "127.0.0.1", "[::1]", "::1")
 
+    def _origin_ok(self) -> bool:
+        """CSRF 対策: 他サイトのページからの API 呼び出しを拒否"""
+        # ブラウザが付ける Sec-Fetch-Site を一次情報にする。none は
+        # アドレスバー直打ち等。same-site は別ポートの localhost ページも
+        # 該当するため許可しない。
+        site = self.headers.get("Sec-Fetch-Site")
+        if site is not None:
+            return site in ("same-origin", "none")
+        # Sec-Fetch-Site を送らないブラウザ向け: Origin を自分自身と照合
+        # （Host は _host_ok() で検証済み。ポートは決め打ちしない）
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            host = (self.headers.get("Host") or "").lower()
+            return origin.lower() == "http://" + host
+        return True   # どちらも無い = 非ブラウザ（curl 等）
+
     def _send_json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -351,6 +367,8 @@ class PropMapHandler(SimpleHTTPRequestHandler):
             return super().do_GET()
         if not self._host_ok():
             return self._send_json({"error": "forbidden host"}, 403)
+        if not self._origin_ok():
+            return self._send_json({"error": "forbidden origin"}, 403)
 
         path = self.path.split("?")[0]
         if path == "/api/new-logs/status":
@@ -375,6 +393,8 @@ class PropMapHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if not self._host_ok():
             return self._send_json({"error": "forbidden host"}, 403)
+        if not self._origin_ok():
+            return self._send_json({"error": "forbidden origin"}, 403)
         path = self.path.split("?")[0]
 
         if path == "/api/new-logs/check":
