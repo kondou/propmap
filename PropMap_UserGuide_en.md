@@ -87,7 +87,7 @@ All files are placed under `~/heatmap/` (macOS/Linux/WSL2) or `%USERPROFILE%\hea
 
 ``` { .no-copy }
 ~/heatmap/
-├── heatmap.html              Main application (self-contained single file)
+├── heatmap.html              Main application
 ├── update.html               Data update page (pre-built downloads / self-build)
 ├── propmap_server.py         Local server (static files + data update API)
 ├── find_python.sh            Python auto-detection (macOS/Linux/WSL2)

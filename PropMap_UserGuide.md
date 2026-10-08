@@ -87,7 +87,7 @@ bash ~/heatmap/start_heatmap.command
 
 ``` { .no-copy }
 ~/heatmap/
-├── heatmap.html              メインアプリ（単一ファイル完結）
+├── heatmap.html              メインアプリ
 ├── update.html               データ更新ページ（構築済みデータ取得・自前構築）
 ├── propmap_server.py         ローカルサーバー（静的配信 + データ更新API）
 ├── find_python.sh            Python 自動検出（macOS/Linux/WSL2用）

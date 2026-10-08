@@ -174,7 +174,7 @@ Get-ChildItem -Path "$env:USERPROFILE\heatmap" -Recurse | Unblock-File</code>
 <h3 id="ファイル構成">ファイル構成</h3>
 <p>すべてのファイルは <code>~/heatmap/</code>（macOS/Linux/WSL2）または <code>%USERPROFILE%\heatmap\</code>（Windows）以下に配置する。リポジトリに含まれるファイルのほか、パイプライン初回実行時に fetch スクリプトが自動取得するファイル（★）とデータ構築スクリプトが生成するファイル（☆）がある。</p>
 <pre><code class="language-no-copy">~/heatmap/
-├── heatmap.html              メインアプリ（単一ファイル完結）
+├── heatmap.html              メインアプリ
 ├── update.html               データ更新ページ（構築済みデータ取得・自前構築）
 ├── propmap_server.py         ローカルサーバー（静的配信 + データ更新API）
 ├── find_python.sh            Python 自動検出（macOS/Linux/WSL2用）
