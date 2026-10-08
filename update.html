@@ -114,6 +114,8 @@
 const $ = id => document.getElementById(id);
 const isJa = /^ja\b/.test(navigator.language);
 const T = (ja, en) => isJa ? ja : en;
+// innerHTML へ挿入するサーバー由来文字列のエスケープ
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 if (!isJa) {
   document.documentElement.lang = 'en';
   document.title = 'PropMap Data Update';
@@ -251,7 +253,7 @@ function renderProgress(st) {
         `所要 ${fmtSec(st.elapsed_sec)}。伝播マップに戻ると新しい年が選択できます。`,
         `Took ${fmtSec(st.elapsed_sec)}. Return to the propagation map to select the new year(s).`)}</span>`;
   } else {
-    sl.innerHTML = `<span class="err">${T('エラー','Error')}: ${st.error || ''}</span>` +
+    sl.innerHTML = `<span class="err">${T('エラー','Error')}: ${esc(st.error || '')}</span>` +
       ` <span class="note">${T('（ログ参照）','(see log)')}</span>`;
   }
   $('prog').value = st.steps_total ? st.step_index / st.steps_total : 0;
@@ -285,7 +287,7 @@ function renderLogsJob(st) {
   }
   if (st.state === 'error' && st.steps_total === 0) {
     $('checkresult').innerHTML =
-      `<div class="err">${T('エラー','Error')}: ${st.error || ''}</div>`;
+      `<div class="err">${T('エラー','Error')}: ${esc(st.error || '')}</div>`;
   }
 }
 
@@ -386,7 +388,7 @@ function renderPrebuiltJob(st) {
   }
   if (st.state === 'error' && st.steps_total === 0) {
     $('pbresult').innerHTML =
-      `<div class="err">${T('エラー','Error')}: ${st.error || ''}</div>`;
+      `<div class="err">${T('エラー','Error')}: ${esc(st.error || '')}</div>`;
   }
 }
 
@@ -412,7 +414,7 @@ async function refresh() {
   catch (e) {
     stopPolling();
     $('checkresult').innerHTML =
-      `<div class="err">${T('サーバーに接続できません','Cannot connect to the server')}: ${e.message}<br>` +
+      `<div class="err">${T('サーバーに接続できません','Cannot connect to the server')}: ${esc(e.message)}<br>` +
       `<span class="note">${T(
         'start_heatmap（propmap_server.py）で起動したサーバーが必要です。python3 -m http.server では更新機能は使えません。',
         'A server started via start_heatmap (propmap_server.py) is required. The update feature does not work with python3 -m http.server.')}` +

@@ -339,6 +339,9 @@ async function loadJSON(paths){
   return null;
 }
 
+// innerHTMLへ挿入するデータ由来値のエスケープ
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
 // ズーム倍率: 1.15 (変更候補: 1.3=旧値, 2.0=旧クリック倍率)
 const ZOOM_FACTOR=1.15;
 // 太陽位置計算（UTC分から太陽の赤緯・経度を計算）
@@ -2797,16 +2800,16 @@ cv.addEventListener('mousemove',e=>{
   // ツールチップ内容構築: グリッド名 + 年別QSO数 + RBN数
   const yearData=_rxCountPerYear[found]||{};
   const years=Object.keys(yearData).sort();
-  let html=`<b>${found}</b>`;
+  let html=`<b>${esc(found)}</b>`;
   if(years.length>0){
-    html+='<br>'+years.map(y=>`${y}: ${yearData[y]} QSO`).join('<br>');
+    html+='<br>'+years.map(y=>`${esc(y)}: ${esc(yearData[y])} QSO`).join('<br>');
   }
   // RBN数（RBNデータがある場合）
   if(allRbnData&&document.getElementById('chk-rbn')?.checked){
     const f=getFilters();
     const rbnC=queryRbn(f);
     const rbnN=rbnC[found];
-    if(rbnN) html+=`<br><span style="color:#cc44cc">RBN: ${rbnN}</span>`;
+    if(rbnN) html+=`<br><span style="color:#cc44cc">RBN: ${esc(rbnN)}</span>`;
   }
   tip.innerHTML=html;
   tip.style.display='block';
